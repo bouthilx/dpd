@@ -1,28 +1,15 @@
-from glob import glob
-import os
+from sgdad.utils.factory import fetch_factories
+from sgdad.dataset.wrapper.base import build_wrapper
 
 
-def fetch_dataset_factories():
-    factories = {}
-    base_module = 'sgdad.dataset'
-    module_path = os.path.dirname(os.path.abspath(__file__))
-    for module_path in glob(os.path.join(module_path, '[A-Za-z]*.py')):
-        module_file = module_path.split(os.sep)[-1]
-
-        if module_file == __file__:
-            continue
-
-        module_name = module_file.split(".py")[0]
-        module = __import__(".".join([base_module, module_name]), fromlist=[''])
-
-        if hasattr(module, 'build'):
-            factories[module_name] = module.build
-
-    return factories
+factories = fetch_factories('sgdad.dataset', __file__)
 
 
 def build_dataset(name, **kwargs):
-    return factories[name](**kwargs)
-    
+    wrapper = kwargs.pop('wrapper', None)
+    data = factories[name](**kwargs)
 
-factories = fetch_dataset_factories()
+    if wrapper:
+        return builder_wrapper(data, **wrapper)
+
+    return data
