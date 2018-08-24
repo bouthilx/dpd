@@ -37,6 +37,7 @@ class VGG(nn.Module):
 
     def __init__(self, vgg_name='vgg11', dataset='cifar10', init_weights=True, batch_norm=False):
         super(VGG, self).__init__()
+        self.architecture = vgg_name
         self.dataset = dataset
         self.features = self.make_layers(cfg[vgg_name], self.dataset, batch_norm)
         
