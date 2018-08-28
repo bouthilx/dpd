@@ -1,3 +1,5 @@
+import io
+
 from kleio.client.logger import kleio_logger
 
 import torch
@@ -8,7 +10,7 @@ from sgdad.utils.factory import fetch_factories
 factories = fetch_factories('sgdad.model', __file__)
 
 
-def build_model(name, **kwargs):
+def build_model(name=None, **kwargs):
     return factories[name](**kwargs)
     
 
@@ -27,5 +29,3 @@ def load_model(model, filename):
     state_dict = torch.load(file_like_object.download())
     model.load_state_dict(state_dict)
     return metadata
-
-
