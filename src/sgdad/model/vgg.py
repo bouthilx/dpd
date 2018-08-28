@@ -35,28 +35,22 @@ cfg = {
 
 class VGG(nn.Module):
 
-    def __init__(self, vgg_name='vgg11', dataset='cifar10', init_weights=True, batch_norm=False):
+    def __init__(self, layers, input_size, init_weights, batch_norm, num_classes):
         super(VGG, self).__init__()
-        self.architecture = vgg_name
-        self.dataset = dataset
-        self.features = self.make_layers(cfg[vgg_name], self.dataset, batch_norm)
+        self.features = self.make_layers(input_size[0], layers, batch_norm)
         
-        if self.dataset == 'cifar10' or self.dataset == 'mnist' or self.dataset == 'fashionmnist':
-            self.classifier = nn.Linear(512, 10)
+        self.classifier = nn.Linear(512, num_classes)
             
-        elif self.dataset == 'cifar100':
-            self.classifier = nn.Linear(512, 100)
-            
-        elif self.dataset == 'imagenet':
-            self.classifier = nn.Sequential(
-                nn.Linear(512 * 7 * 7, 4096),
-                nn.ReLU(True),
-                nn.Dropout(),
-                nn.Linear(4096, 4096),
-                nn.ReLU(True),
-                nn.Dropout(),
-                nn.Linear(4096, num_classes),
-            )
+        # elif self.dataset == 'imagenet':
+        #     self.classifier = nn.Sequential(
+        #         nn.Linear(512 * 7 * 7, 4096),
+        #         nn.ReLU(True),
+        #         nn.Dropout(),
+        #         nn.Linear(4096, 4096),
+        #         nn.ReLU(True),
+        #         nn.Dropout(),
+        #         nn.Linear(4096, num_classes),
+        #     )
             
         if init_weights:
             self._initialize_weights()
@@ -81,12 +75,8 @@ class VGG(nn.Module):
                 nn.init.constant(m.bias, 0)
 
 
-    def make_layers(self, cfg, dataset, batch_norm):
+    def make_layers(self, in_channels, cfg, batch_norm):
         layers = []
-        if dataset == 'mnist' or dataset == 'fashionmnist':
-            in_channels = 1
-        elif dataset == 'cifar10' or dataset == 'cifar100' or dataset == 'imagenet':
-            in_channels = 3
         
         for v in cfg:
             if v == 'M':
@@ -99,5 +89,3 @@ class VGG(nn.Module):
                     layers += [conv2d, nn.ReLU(inplace=True)]
                 in_channels = v
         return nn.Sequential(*layers)
-
-
