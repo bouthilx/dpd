@@ -4,7 +4,6 @@ import os
 
 def fetch_factories(base_module, base_file_name):
     factories = {}
-    base_module = 'sgdad.dataset'
     module_path = os.path.dirname(os.path.abspath(base_file_name))
     for module_path in glob(os.path.join(module_path, '[A-Za-z]*.py')):
         module_file = module_path.split(os.sep)[-1]

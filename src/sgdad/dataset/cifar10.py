@@ -1,25 +1,34 @@
 import torch
 from torchvision import datasets, transforms
 
-def build(train_batch_size=128, test_batch_size=500, num_workers=2):
+
+DATA_SIZE = 45000
+
+
+def build(batch_size, data_path, num_workers):
     transform = transforms.Compose(
     [transforms.ToTensor(),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-    trainset = datasets.CIFAR10(root='./data/cifar10', train=True,
-                                            download=True, transform=transform)
-    train_loader = torch.utils.data.DataLoader(trainset, batch_size=train_batch_size,
-                                              shuffle=True, num_workers=num_workers)
-    
-    testset = datasets.CIFAR10(root='./data/cifar10', train=False,
-                                           download=True, transform=transform)
-    test_loader = torch.utils.data.DataLoader(testset, batch_size=test_batch_size,
-                                             shuffle=False, num_workers=num_workers)
-    
-    return train_loader, test_loader
+    trainset = datasets.CIFAR10(root=data_path, train=True,
+                                download=True, transform=transform)
 
-def add_subparser(parser):
-    cifar10_parser = parser.add_parser('cifar10', help='Arguments for dataset cifar10')
+    sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(trainset))))
 
-    return cifar10_parser
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
+                                               sampler=sampler, num_workers=num_workers)
 
+    sampler = torch.utils.data.sampler.SubsetRandomSampler(range(DATA_SIZE, len(trainset)))
+
+    valid_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
+                                               sampler=sampler, num_workers=num_workers)
+
+    testset = datasets.CIFAR10(root=data_path, train=False,
+                               download=True, transform=transform)
+
+    sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(testset))))
+
+    test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
+                                              sampler=sampler, num_workers=num_workers)
+
+    return dict(train=train_loader, valid=valid_loader, test=test_loader)
