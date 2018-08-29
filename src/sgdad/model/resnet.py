@@ -5,9 +5,6 @@ import torch.utils.model_zoo as model_zoo
 
 
 # All models here are assumed to accept RGB input, thus 3 input channels.
-__all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
-           'resnet152']
-
 # Checkpoints of models pre-trained on Imagenet.
 # NOT SUPPORTED YET
 model_urls = {
@@ -18,15 +15,6 @@ model_urls = {
     'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
 }
 
-
-# Configurations for the ResNet architecture variants, with related block and layers.
-cfg = {
-    'resnet18': [BasicBlock, [2, 2, 2, 2]],
-    'resnet34': [BasicBlock, [3, 4, 6, 3]],
-    'resnet50': [Bottleneck, [3, 4, 6, 3]],
-    'resnet101': [Bottleneck, [3, 4, 23, 3]],
-    'resnet152': [Bottleneck, [3, 8, 36, 3]],
-}
 
 
 def conv3x3(in_planes, out_planes, stride=1):
@@ -108,22 +96,33 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, resnet_name, num_classes=1000):
-        self.architecture = resnet_name
-        block = cfg[resnet_name][0]
-        layers = cfg[resnet_name][1]
+    def __init__(self, block, layers, input_size, conv, maxpool, avgpool, num_classes):
         self.inplanes = 64
         super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
+        self.conv1 = nn.Conv2d(input_size[0], 64, **conv, bias=False)
+        # For ImageNet
+        # self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+        #                        bias=False)
+
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        if maxpool:
+            # For ImageNet
+            # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+            self.maxpool(**maxpool)
+        else:
+            self.maxpool = None
+
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = nn.AvgPool2d(7, stride=1)
+
+        if avgpool:
+            self.avgpool = nn.AvgPool2d(**avgpool)
+        else:
+            self.avgpool = None
+
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
@@ -154,15 +153,28 @@ class ResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        x = self.maxpool(x)
+
+        if self.maxpool:
+            x = self.maxpool(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
 
-        x = self.avgpool(x)
+        if self.avgpool:
+            x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
         return x
+
+
+# Configurations for the ResNet architecture variants, with related block and layers.
+# cfg = {
+#     'resnet18': [BasicBlock, [2, 2, 2, 2]],
+#     'resnet34': [BasicBlock, [3, 4, 6, 3]],
+#     'resnet50': [Bottleneck, [3, 4, 6, 3]],
+#     'resnet101': [Bottleneck, [3, 4, 23, 3]],
+#     'resnet152': [Bottleneck, [3, 8, 36, 3]],
+# }
