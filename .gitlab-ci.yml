@@ -8,13 +8,17 @@ build:
   type: build
   script:
     apt-get update -qy
-    apt-get install -y python-dev python-pip
     python --version # -c 'print("Hello world")'
 
 flake8:
   type: pretest
   image: python:3.6
-  script: python --version  # c 'print("flake8")'
+  script: tox -e flake8
+
+# pylint:
+#   type: pretest
+#   image: python:3.6
+#   script: tox -e pylint
 
 py36:
   type: test
