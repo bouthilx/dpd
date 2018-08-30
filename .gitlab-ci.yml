@@ -1,0 +1,25 @@
+stages:
+  - build
+  - pretest
+  - test
+  - deploy
+
+build:
+  type: build
+  script:
+    apt-get update -qy
+    apt-get install -y python-dev python-pip
+    python --version # -c 'print("Hello world")'
+
+flake8:
+  type: pretest
+  image: python:3.6
+  script: python --version  # c 'print("flake8")'
+
+py36:
+  type: test
+  script: python --version  # -c 'print("pytest")'
+
+packaging:
+  stage: deploy
+  script: python --version  # -c 'print("deploying")'
