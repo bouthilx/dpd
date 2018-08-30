@@ -4,26 +4,35 @@ stages:
   - test
   - deploy
 
-build:
-  type: build
-  script:
-    apt-get update -qy
-    python --version # -c 'print("Hello world")'
+image: python:3.6
 
-flake8:
-  type: pretest
-  image: python:3.6
-  script: tox -e flake8
+before_script:
+  - python --version
+  - pip install tox
+  - pip install --upgrade setuptools>=40.1.0
+
+# build:
+#   type: build
+#   script:
+#   - python --version
+
+# flake8:
+#   type: pretest
+#   script: tox -e flake8
 
 # pylint:
 #   type: pretest
-#   image: python:3.6
 #   script: tox -e pylint
 
 py36:
   type: test
-  script: python --version  # -c 'print("pytest")'
+  script: tox -e py36  # -c 'print("pytest")'
+  after_script:
+    - tox -e final-coverage
+    - tox -e codecov
 
-packaging:
+singularity:
   stage: deploy
-  script: python --version  # -c 'print("deploying")'
+  script:
+    - flow-deploy . SingularityTemplate --use-commit-checksum
+        --singularity-repo https://github.com/bouthilx/sgd-space-hub.git
