@@ -27,12 +27,14 @@ before_script:
 py36:
   type: test
   script: tox -e py36  # -c 'print("pytest")'
-  after_script:
-    - tox -e final-coverage
-    - tox -e codecov
+  # after_script:
+  #   - tox -e final-coverage
+  #   - tox -e codecov
 
 singularity:
   stage: deploy
   script:
+    - pip install git+https://github.com/bouthilx/smartdispatch.git
+    - pip install git+https://github.com/bouthilx/flow.git
     - flow-deploy . SingularityTemplate --use-commit-checksum
-        --singularity-repo https://github.com/bouthilx/sgd-space-hub.git
+        --singularity-repo https://${GITHUB_TOKEN}@github.com/bouthilx/sgd-space-hub.git
