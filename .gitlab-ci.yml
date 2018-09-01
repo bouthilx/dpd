@@ -33,6 +33,8 @@ py36:
 
 singularity:
   stage: deploy
+  only:
+    - master
   script:
     - pip install git+https://github.com/bouthilx/smartdispatch.git
     - pip install git+https://github.com/bouthilx/flow.git
