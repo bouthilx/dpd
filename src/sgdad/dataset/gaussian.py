@@ -31,19 +31,19 @@ class Gaussian(Dataset):
 
 
 
-def build(batch_size=128, width=10, n_classes=5, data_size=10000):
-    data_size *= width
+def build(batch_size, width, classes, size, data_path):
+    size *= width
 
-    loaders = []
-    for _ in range(3):
+    loaders = {}
+    for set_name in ['train', 'valid', 'test']:
         dataset = Gaussian(
-            width=width, n_classes=n_classes,
+            width=width, n_classes=classes,
             mean=0, std=1 / width,
-            length=data_size)
+            length=size)
 
-        loaders.append(torch.utils.data.DataLoader(
+        loaders[set_name] = torch.utils.data.DataLoader(
             dataset=dataset,
-            batch_size=batch_size, shuffle=True))
+            batch_size=batch_size, shuffle=True)
 
 
     return loaders
