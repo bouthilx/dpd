@@ -13,7 +13,7 @@ EXPERIMENT = "synthetic"
 
 flow_template = "flow-submit {file_path}"
 
-kleio_template = "kleio run --allow-any-change --tags {experiment};{dataset};{model};{version}"
+kleio_template = "kleio run --config /config/kleio.core/kleio_config.yaml --allow-any-change --tags '{experiment};{dataset};{model};{version}'"
 
 commandline_template = "{flow} {kleio}"
 

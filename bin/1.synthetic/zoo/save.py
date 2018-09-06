@@ -7,10 +7,10 @@ from sgdad.utils.commandline import execute
 
 EXPERIMENT = "synthetic"
 
-kleio_template = "kleio save --tags '{experiment};{dataset};{model};{version}'"
+kleio_template = 'kleio save --config /config/kleio.core/kleio_config.yaml --tags {experiment};{dataset};{model};{version}'
 
 script_template = (
-    "python src/sgdad/train.py --config={file_path} "
+    "python3.6 src/sgdad/train.py --config={file_path} "
     "--model-seed 1 --sampler-seed 1 --epochs 300 "
     "--update data.wrapper.level={data_wrapper_level}")
 
