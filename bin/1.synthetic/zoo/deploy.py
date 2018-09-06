@@ -13,7 +13,7 @@ EXPERIMENT = "synthetic"
 
 flow_template = "flow-submit {file_path}"
 
-kleio_template = "kleio run --tags {experiment};{dataset};{model};{version}"
+kleio_template = "kleio run --allow-any-change --tags {experiment};{dataset};{model};{version}"
 
 commandline_template = "{flow} {kleio}"
 
@@ -24,6 +24,9 @@ commandline_template = "{flow} {kleio}"
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description='Script to train a model')
+
+    parser.add_argument('--kleio-config', type=argparse.FileType('r'),
+                        help="custom configuration for kleio")
     parser.add_argument('--configs', default='configs', help='Root folder for configs')
     parser.add_argument('--version', required=True, help='Version of the execution')
     parser.add_argument('--datasets', nargs="*", help='Datasets to save executions for')
@@ -69,7 +72,7 @@ def main(argv=None):
     futures = []
     for dataset, model, file_path in iterator:
         tags = [EXPERIMENT, dataset, model, args.version]
-        database = TrialBuilder().build_database({})
+        database = TrialBuilder().build_database({'config': args.kleio_config})
         query = {
             'tags': {'$all': tags},
             'registry.status': {'$in': status.RESERVABLE}
