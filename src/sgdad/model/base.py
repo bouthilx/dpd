@@ -22,7 +22,7 @@ def save_model(model, filename, **metadata):
 
 
 def load_model(model, filename):
-    artifacts = kleio_logger.load_artifacts('weights', {})
+    artifacts = kleio_logger.load_artifacts(filename, {})
     if not artifacts:
         return None
     file_like_object, metadata = artifacts[-1]
