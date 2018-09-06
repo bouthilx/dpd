@@ -1,5 +1,5 @@
 data:
-    name: mnist
+    name: cifar10
     batch_size: 128
     num_workers: 1
 
@@ -9,8 +9,13 @@ data:
         level: 'overwrite-me'
 
 model:
-    name: vgg11
-    batch_norm: True
+    name: mlp
+    layers:
+        - 1000
+        - 500
+        - 300
+        - 200
+        - 100
 
 optimizer:
     name: sgd

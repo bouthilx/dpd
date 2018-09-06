@@ -1,0 +1,19 @@
+data:
+    type: gaussian 
+    width: 10
+    size: 1000
+    classes: 5
+
+model:
+    type: mlp
+    layers:
+        - 100
+        - 100
+
+optim:
+    type: sgd
+    lr: 0.01
+    momentum: 0.0
+    
+model_seed: 'orion~randint(0, 100)'
+sampler_seed: 'orion~randint(0, 100)'

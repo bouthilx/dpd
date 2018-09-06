@@ -9,8 +9,7 @@ data:
         level: 'overwrite-me'
 
 model:
-    name: vgg11
-    batch_norm: True
+    name: lenet
 
 optimizer:
     name: sgd

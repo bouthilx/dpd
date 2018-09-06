@@ -1,7 +1,9 @@
 data:
-    name: mnist
+    name: gaussian
+    width: 10
+    size: 1000
+    classes: 5
     batch_size: 128
-    num_workers: 1
 
     wrapper:
         name: shuffling
@@ -9,8 +11,10 @@ data:
         level: 'overwrite-me'
 
 model:
-    name: vgg11
-    batch_norm: True
+    name: mlp
+    layers:
+        - 200
+        - 200
 
 optimizer:
     name: sgd

@@ -2,19 +2,20 @@ import asyncio
 import argparse
 import os
 
+from kleio.core.io.trial_builder import TrialBuilder
+from kleio.core.trial import status
+
 from sgdad.utils.commandline import execute
 
 
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 EXPERIMENT = "synthetic"
 
-kleio_template = "kleio save --tags {experiment};{dataset};{model};{version}"
+flow_template = "flow-submit {file_path}"
 
-script_template = (
-    "python src/sgdad/train.py --config={file_path} "
-    "--model-seed 1 --sampler-seed 1 --epochs 100 "
-    "overwrite --data-wrapper-level {data_wrapper_level}")
+kleio_template = "kleio run --tags {experiment};{dataset};{model};{version}"
 
-commandline_template = "{kleio} {script}"
+commandline_template = "{flow} {kleio}"
 
 # orion save -n $experiment.$dataset.$model \
 #     kleio run --tags $experiment;$dataset;$model \
@@ -46,7 +47,7 @@ def get_instances(configs_root, datasets, models, experiment):
         if datasets and dataset not in datasets:
             continue
 
-        possible_models = [model[:-5] for model 
+        possible_models = [model[:-5] for model
                            in os.listdir(os.path.join(configs_root, experiment, dataset))
                            if model.split(".")[-1] == "yaml"]
 
@@ -55,11 +56,9 @@ def get_instances(configs_root, datasets, models, experiment):
             if models and model not in models:
                 continue
 
-            file_path = os.path.join(configs_root, experiment, dataset, model + ".yaml")
+            file_path = os.path.join(ROOT_DIR, 'submit', dataset, model + ".sh")
 
             yield dataset, model, file_path
-
-
 
 
 def main(argv=None):
@@ -69,13 +68,23 @@ def main(argv=None):
     iterator = get_instances(args.configs, args.datasets, args.models, "1.synthetic")
     futures = []
     for dataset, model, file_path in iterator:
-        for data_wrapper_level in args.data_wrapper_levels:
-            kleio = kleio_template.format(
-                experiment=EXPERIMENT, dataset=dataset, model=model, version=args.version)
-            script = script_template.format(
-                file_path=file_path, data_wrapper_level=data_wrapper_level)
-            commandline = commandline_template.format(kleio=kleio, script=script)
-            futures.append(execute(commandline, print_only=args.print_only))
+        tags = [EXPERIMENT, dataset, model, args.version]
+        database = TrialBuilder().build_database({})
+        query = {
+            'tags': {'$all': tags},
+            'registry.status': {'$in': status.RESERVABLE}
+            }
+
+        if not database.count('trials.reports', query):
+            continue
+
+        flow = flow_template.format(file_path=file_path)
+        kleio = kleio_template.format(
+            experiment=EXPERIMENT, dataset=dataset, model=model,
+            version=args.version)
+        commandline = commandline_template.format(flow=flow, kleio=kleio)
+        # flow-submit file_path kleio run --tags {experiment};{dataset};{model};{version}
+        futures.append(execute(commandline, print_only=args.print_only))
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(*futures))
