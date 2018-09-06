@@ -64,7 +64,8 @@ def main(argv=None):
 
     args = parse_args(argv)
 
-    if not args.data_wrapper_levels:
+    data_wrapper_levels = args.data_wrapper_levels
+    if not data_wrapper_levels:
         data_wrapper_levels = [i / 10. for i in range(0, 11)]
 
     iterator = get_instances(args.configs, args.datasets, args.models, "1.synthetic")
