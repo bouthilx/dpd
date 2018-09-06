@@ -11,8 +11,8 @@ kleio_template = "kleio save --tags {experiment};{dataset};{model};{version}"
 
 script_template = (
     "python src/sgdad/train.py --config={file_path} "
-    "--model-seed 1 --sampler-seed 1 --epochs 100 "
-    "overwrite --data-wrapper-level {data_wrapper_level}")
+    "--model-seed 1 --sampler-seed 1 --epochs 300"
+    "--update data.wrapper.level={data_wrapper_level}")
 
 commandline_template = "{kleio} {script}"
 
@@ -58,8 +58,6 @@ def get_instances(configs_root, datasets, models, experiment):
             file_path = os.path.join(configs_root, experiment, dataset, model + ".yaml")
 
             yield dataset, model, file_path
-
-
 
 
 def main(argv=None):
