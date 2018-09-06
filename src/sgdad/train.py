@@ -4,15 +4,23 @@ import pprint
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
 from ignite.metrics import CategoricalAccuracy
 
+from kleio.core.io.resolve_config import merge_configs
+from kleio.core.utils import unflatten
+
 from orion.client import report_results
 
 import torch
 
 import yaml
-
 from sgdad.dataset.base import build_dataset
 from sgdad.model.base import build_model, load_model, save_model
 from sgdad.optimizer.base import build_optimizer
+
+
+def update(config, arguments):
+    pairs = [argument.split("=") for argument in arguments]
+    kwargs = unflatten(dict((pair[0], eval(pair[1])) for pair in pairs))
+    return merge_configs(config, kwargs)
 
 
 def main(argv=None):
@@ -22,10 +30,15 @@ def main(argv=None):
     parser.add_argument('--sampler-seed', type=int, required=True, help='Seed for data sampling order')
     parser.add_argument('--epochs', type=int, required=True, help='number of epochs to train.')
 
+    parser.add_argument('--updates', nargs='+', default=[], metavar='updates',
+                        help='Values to update in the configuration file')
+
     args = parser.parse_args(argv)
 
     with open(args.config, 'r') as f:
         config = yaml.load(f)
+
+    update(config, args.updates)
 
     device = torch.device('cpu')
     if torch.cuda.is_available():
@@ -65,7 +78,7 @@ def main(argv=None):
     print("\n\n")
 
     trainer = create_supervised_trainer(
-        model, optimizer, torch.nn.functional.nll_loss, device=device)
+        model, optimizer, torch.nn.functional.cross_entropy, device=device)
     evaluator = create_supervised_evaluator(
         model, metrics={'accuracy': CategoricalAccuracy()}, device=device)
 
