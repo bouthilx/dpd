@@ -7,11 +7,11 @@ from sgdad.utils.commandline import execute
 
 EXPERIMENT = "synthetic"
 
-kleio_template = "kleio save --tags {experiment};{dataset};{model};{version}"
+kleio_template = "kleio save --tags '{experiment};{dataset};{model};{version}'"
 
 script_template = (
     "python src/sgdad/train.py --config={file_path} "
-    "--model-seed 1 --sampler-seed 1 --epochs 300"
+    "--model-seed 1 --sampler-seed 1 --epochs 300 "
     "--update data.wrapper.level={data_wrapper_level}")
 
 commandline_template = "{kleio} {script}"
@@ -64,10 +64,13 @@ def main(argv=None):
 
     args = parse_args(argv)
 
+    if not args.data_wrapper_levels:
+        data_wrapper_levels = [i / 10. for i in range(0, 11)]
+
     iterator = get_instances(args.configs, args.datasets, args.models, "1.synthetic")
     futures = []
     for dataset, model, file_path in iterator:
-        for data_wrapper_level in args.data_wrapper_levels:
+        for data_wrapper_level in data_wrapper_levels:
             kleio = kleio_template.format(
                 experiment=EXPERIMENT, dataset=dataset, model=model, version=args.version)
             script = script_template.format(
