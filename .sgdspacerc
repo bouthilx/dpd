@@ -1,0 +1,17 @@
+module load singularity/2.5
+SINGULARITY_DIR=/project/6008064/${USER}/singularity
+export SREGISTRY_STORAGE=$SINGULARITY_DIR
+export SINGULARITY_CACHEDIR=$SINGULARITY_DIR/cache
+export SREGISTRY_DATABASE=$SINGULARITY_DIR
+
+export CONTAINER_DATA=$SCRATCH/data
+export CERTIFICATE_FOLDER=$HOME/certs
+export CONTAINER_HOME=$SCRATCH/home
+export CONTAINER_CONFIG=$HOME/.singularity.config
+
+export SGD_SPACE_DATA_PATH=/data
+export KLEIO_DATABASE_FILE_DIR=/data/kleio
+
+export PYTHONUNBUFFERED=1
+
+module load 'nixpkgs/16.09' 'python/3.5'
