@@ -7,6 +7,8 @@ from ignite.metrics import CategoricalAccuracy
 from kleio.core.io.resolve_config import merge_configs
 from kleio.core.utils import unflatten
 
+from kleio.client.logger import kleio_logger
+
 from orion.client import report_results
 
 import torch
@@ -92,7 +94,19 @@ def main(argv=None):
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def trainer_save_model(engine):
-        print("Epoch {:>4} Iteration {:>8}".format(engine.state.epoch, engine.state.iteration))
+        acc = evaluator.run(valid_loader).metrics['accuracy']
+
+        kleio_logger.log_statistic(**{
+            'epoch': engine.state.epoch,
+            'valid': dict(
+                error_rate=1. - acc
+            ),
+            'train': dict(
+                loss=engine.state.output
+            )
+        })
+
+        print("Epoch {:>4} Iteration {:>8} Loss {:>12}".format(engine.state.epoch, engine.state.iteration, engine.state.output))
         save_model(model, 'model', epoch=engine.state.epoch)
 
     trainer.run(train_loader, max_epochs=args.epochs)
