@@ -11,9 +11,9 @@ from sgdad.utils.commandline import execute
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 EXPERIMENT = "synthetic"
 
-flow_template = "flow-submit {file_path}"
+flow_template = "flow-submit {file_path} {container}"
 
-kleio_template = "kleio run --config /config/kleio.core/kleio_config.yaml --allow-any-change --tags '{experiment};{dataset};{model};{version}'"
+kleio_template = "kleio run --config /config/kleio.core/kleio_config.yaml --tags '{experiment};{dataset};{model};{version}'"
 
 commandline_template = "{flow} {kleio}"
 
@@ -24,7 +24,7 @@ commandline_template = "{flow} {kleio}"
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description='Script to train a model')
-
+    parser.add_argument('--container', required=True, help='Container to use for the execution')
     parser.add_argument('--kleio-config', type=argparse.FileType('r'),
                         help="custom configuration for kleio")
     parser.add_argument('--configs', default='configs', help='Root folder for configs')
@@ -78,10 +78,17 @@ def main(argv=None):
             'registry.status': {'$in': status.RESERVABLE}
             }
 
-        if not database.count('trials.reports', query):
+        total = database.count('trials.reports', {'tags': {'$all': tags}})
+        runnable = database.count('trials.reports', query)
+
+        print()
+        print("{:>40} Total:    {:>5}".format(";".join(tags[1:]), total))
+        print("{:>40} Runnable: {:>5}".format("", runnable))
+
+        if not runnable:
             continue
 
-        flow = flow_template.format(file_path=file_path)
+        flow = flow_template.format(file_path=file_path, container=args.container)
         kleio = kleio_template.format(
             experiment=EXPERIMENT, dataset=dataset, model=model,
             version=args.version)

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-#SBATCH --job-name=synthetic.cifar10.lenet
+#SBATCH --job-name=synthetic.cifar10.lenet.overwrite-suffix
+#SBATCH --output=overwrite-me
+#SBATCH --error=overwrite-me
 #SBATCH --time=02:59:00
 
 #SBATCH --cpus-per-task=4
@@ -8,4 +10,5 @@
 
 #SBATCH --export=ALL
 #SBATCH --mem=32000M
-#SBATCH --account=rpp-bengioy
+#SBATCH --account=overwrite-me
+#SBATCH --array=1-10
