@@ -23,9 +23,15 @@ def save_model(model, filename, **metadata):
 
 def load_model(model, filename):
     artifacts = kleio_logger.load_artifacts(filename, {})
-    if not artifacts:
+
+    artifact = None
+    for artifact in artifacts:
+        continue
+
+    if artifact is None:
         return None
-    file_like_object, metadata = artifacts[-1]
+
+    file_like_object, metadata = artifact
     state_dict = torch.load(file_like_object.download())
     model.load_state_dict(state_dict)
     return metadata
