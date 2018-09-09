@@ -11,11 +11,13 @@ from sgdad.utils.commandline import execute
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 EXPERIMENT = "synthetic"
 
-flow_template = "flow-submit {file_path} {container}"
+options = "array=1-10,mem=30000M"
+
+flow_template = "flow-submit {container} --config {file_path} --options '{options}'{optionals}"
 
 kleio_template = "kleio run --allow-host-change --config /config/kleio.core/kleio_config.yaml --tags '{experiment};{dataset};{model};{version}'"
 
-commandline_template = "{flow} {kleio}"
+commandline_template = "{flow} launch {kleio}"
 
 # orion save -n $experiment.$dataset.$model \
 #     kleio run --tags $experiment;$dataset;$model \
@@ -35,7 +37,9 @@ def parse_args(argv=None):
     # TODO remove print_only, and turn it into a test for kleio, if not using
     # kleio to register this execution, then print-only
     parser.add_argument('--print-only', action='store_true',
-                        help='Print executions but do not execute.')
+                        help='Print commands but do not execute.')
+    parser.add_argument('--generate-only', action='store_true',
+                        help='Generate sbatch scripts but do not submit.')
 
     return parser.parse_args(argv)
 
@@ -59,7 +63,12 @@ def get_instances(configs_root, datasets, models, experiment):
             if models and model not in models:
                 continue
 
-            file_path = os.path.join(ROOT_DIR, 'submit', dataset, model + ".sh")
+            basedir = os.path.join(ROOT_DIR, 'submit', dataset)
+
+            if not os.path.isdir(basedir):
+                os.makedirs(basedir)
+
+            file_path =  os.path.join(basedir, model + ".sh")
 
             yield dataset, model, file_path
 
@@ -88,7 +97,9 @@ def main(argv=None):
         if not runnable:
             continue
 
-        flow = flow_template.format(file_path=file_path, container=args.container)
+        flow = flow_template.format(
+            file_path=file_path, container=args.container, options=options,
+            optionals=" --generate-only" if args.generate_only else "")
         kleio = kleio_template.format(
             experiment=EXPERIMENT, dataset=dataset, model=model,
             version=args.version)
