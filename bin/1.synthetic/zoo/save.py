@@ -7,7 +7,7 @@ from sgdad.utils.commandline import execute
 
 EXPERIMENT = "synthetic"
 
-kleio_template = 'kleio save --config /config/kleio.core/kleio_config.yaml --tags {experiment};{dataset};{model};{version}'
+kleio_template = 'kleio save --branch-original --config /config/kleio.core/kleio_config.yaml --tags {experiment};{dataset};{model};{version}'
 
 script_template = (
     "python3.6 /repos/sgd-space/src/sgdad/train.py --config={file_path} "
