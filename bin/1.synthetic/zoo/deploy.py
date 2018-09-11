@@ -11,7 +11,7 @@ from sgdad.utils.commandline import execute
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 EXPERIMENT = "synthetic"
 
-options = "array=1-10,mem=30000M"
+options = "array=1-10;mem=30000M;time=2:59:00"
 
 flow_template = "flow-submit {container} --config {file_path} --options '{options}'{optionals}"
 
