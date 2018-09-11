@@ -1,5 +1,8 @@
 import argparse
 import pprint
+import random
+
+import numpy
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
 from ignite.metrics import CategoricalAccuracy
@@ -92,6 +95,10 @@ def main(argv=None):
         else:
             save_model(model, 'model', epoch=0)
 
+    @trainer.on(Events.EPOCH_STARTED)
+    def trainer_seeding(engine):
+        seed(args.sampler_seed + engine.state.epoch)
+
     @trainer.on(Events.EPOCH_COMPLETED)
     def trainer_save_model(engine):
         acc = evaluator.run(valid_loader).metrics['accuracy']
@@ -109,6 +116,7 @@ def main(argv=None):
         print("Epoch {:>4} Iteration {:>8} Loss {:>12}".format(engine.state.epoch, engine.state.iteration, engine.state.output))
         save_model(model, 'model', epoch=engine.state.epoch)
 
+    print("Training")
     trainer.run(train_loader, max_epochs=args.epochs)
 
     evaluator.run(valid_loader)
@@ -120,6 +128,12 @@ def main(argv=None):
 
 
 def seed(seed):
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+
+    random.seed(seed)
+    numpy.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
