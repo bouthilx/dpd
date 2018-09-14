@@ -1,5 +1,5 @@
 data:
-    name: mnist
+    name: cifar10
     batch_size: 128
     num_workers: 1
 
@@ -10,7 +10,7 @@ data:
 
 model:
     name: mlp
-    bias: True
+    bias: False
     layers:
         - 1000
         - 500

@@ -12,6 +12,7 @@ data:
 
 model:
     name: mlp
+    bias: True
     layers:
         - 100
 
