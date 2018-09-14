@@ -13,12 +13,12 @@ EXPERIMENT = "synthetic"
 
 options_template = "{array}mem=30000M;time=2:59:00"
 
-flow_template = "flow-submit {container} --config {file_path} --options '{options}'{optionals}"
+flow_template = "flow-submit {container} --config {file_path} --options {options}{optionals}"
 
 kleio_template = """\
 kleio run --allow-host-change \
 --config /config/kleio.core/kleio_config.yaml \
---tags '{experiment};{dataset};{model};{execution_version};{analysis_version}'\
+--tags {experiment};{dataset};{model};{execution_version};{analysis_version}\
 """
 
 commandline_template = "{flow} launch {kleio}"
