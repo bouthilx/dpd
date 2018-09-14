@@ -2,39 +2,39 @@ import asyncio
 import argparse
 import os
 
-from kleio.core.io.trial_builder import TrialBuilder
-from kleio.core.trial import status
+from orion.core.io.experiment_builder import ExperimentBuilder
 
 from sgdad.utils.commandline import execute
 
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-EXPERIMENT = "synthetic"
+EXPERIMENT = "benchmark"
 
-options_template = "{array};mem=30000M;time=2:59:00"
+options = "array=1-10;mem=30000M;time=2:59:00"
 
 flow_template = "flow-submit {container} --config {file_path} --options '{options}'{optionals}"
 
-kleio_template = """\
-kleio run --allow-host-change \
---config /config/kleio.core/kleio_config.yaml --tags '{experiment};{dataset};{model};{version}'\
-"""
+orion_template = "orion hunt -n '{experiment};{dataset};{model};{version}' --config /repos/sgd-space/configs/0.benchmark/orion_config.yaml"
 
-commandline_template = "{flow} launch {kleio}"
+commandline_template = "{flow} launch {orion}"
+
+# orion save -n $experiment.$dataset.$model \
+#     orion run --tags $experiment;$dataset;$model \
+#         python src/sgdad/train.py --config=${file_path} --model-seed 1 --sampler-seed 1 --epochs 10
 
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description='Script to train a model')
     parser.add_argument('--container', required=True, help='Container to use for the execution')
-    parser.add_argument('--kleio-config', type=argparse.FileType('r'),
-                        help="custom configuration for kleio")
+    parser.add_argument('--orion-config', type=argparse.FileType('r'),
+                        help="custom configuration for orion")
     parser.add_argument('--configs', default='configs', help='Root folder for configs')
     parser.add_argument('--version', required=True, help='Version of the execution')
     parser.add_argument('--datasets', nargs="*", help='Datasets to save executions for')
     parser.add_argument('--models', nargs="*", help='Models to save executions for')
     parser.add_argument('--data-wrapper-levels', nargs="*", help='Noise levels to try')
-    # TODO remove print_only, and turn it into a test for kleio, if not using
-    # kleio to register this execution, then print-only
+    # TODO remove print_only, and turn it into a test for orion, if not using
+    # orion to register this execution, then print-only
     parser.add_argument('--print-only', action='store_true',
                         help='Print commands but do not execute.')
     parser.add_argument('--generate-only', action='store_true',
@@ -67,7 +67,7 @@ def get_instances(configs_root, datasets, models, experiment):
             if not os.path.isdir(basedir):
                 os.makedirs(basedir)
 
-            file_path = os.path.join(basedir, model + ".sh")
+            file_path =  os.path.join(basedir, model + ".sh")
 
             yield dataset, model, file_path
 
@@ -76,36 +76,24 @@ def main(argv=None):
 
     args = parse_args(argv)
 
-    iterator = get_instances(args.configs, args.datasets, args.models, "1.synthetic")
+    iterator = get_instances(args.configs, args.datasets, args.models, "0.benchmark")
     futures = []
-
-    database = TrialBuilder().build_database({'config': args.kleio_config})
     for dataset, model, file_path in iterator:
-        tags = [EXPERIMENT, dataset, model, args.version]
-        query = {
-            'tags': {'$all': tags},
-            'registry.status': {'$in': status.RESERVABLE}}
+        name = '{experiment};{dataset};{model};{version}'.format(
+            experiment=EXPERIMENT, dataset=dataset, model=model, version=args.version)
 
-        total = database.count('trials.reports', {'tags': {'$all': tags}})
-        runnable = database.count('trials.reports', query)
+        experiment = ExperimentBuilder().build_view({'name': name})
 
-        print()
-        print("{:>40} Total:    {:>5}".format(";".join(tags[1:]), total))
-        print("{:>40} Runnable: {:>5}".format("", runnable))
-
-        if not runnable:
+        if experiment.is_done:
             continue
-
-        options = options_template.format(array="array=1-{}".format(min(runnable, 10)))
 
         flow = flow_template.format(
             file_path=file_path, container=args.container, options=options,
             optionals=" --generate-only" if args.generate_only else "")
-        kleio = kleio_template.format(
+        orion = orion_template.format(
             experiment=EXPERIMENT, dataset=dataset, model=model,
             version=args.version)
-        commandline = commandline_template.format(flow=flow, kleio=kleio)
-        # flow-submit file_path kleio run --tags {experiment};{dataset};{model};{version}
+        commandline = commandline_template.format(flow=flow, orion=orion)
         futures.append(execute(commandline, print_only=args.print_only))
 
     loop = asyncio.get_event_loop()

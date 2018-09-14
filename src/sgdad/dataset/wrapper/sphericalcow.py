@@ -1,3 +1,6 @@
+import torch
+
+
 class SphericalCowIterator(object):
     def __init__(self, iterator):
         self.iterator = iterator
@@ -39,7 +42,7 @@ class SphericalCow(object):
         return SphericalCowIterator(iter(self.dataloader))
 
 
-def build(data, target, level):
+def build(data):
     wrapped_data = {}
     wrapped_data.update(data)
     

@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import torch
 from torchvision import datasets, transforms
 
@@ -31,4 +33,4 @@ def build(batch_size, data_path, num_workers):
     test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
                                               sampler=sampler, num_workers=num_workers)
 
-    return dict(train=train_loader, valid=valid_loader, test=test_loader)
+    return OrderedDict(train=train_loader, valid=valid_loader, test=test_loader)

@@ -11,13 +11,14 @@ from sgdad.utils.commandline import execute
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 EXPERIMENT = "synthetic"
 
-options_template = "{array};mem=30000M;time=2:59:00"
+options_template = "{array}mem=30000M;time=2:59:00"
 
 flow_template = "flow-submit {container} --config {file_path} --options '{options}'{optionals}"
 
 kleio_template = """\
 kleio run --allow-host-change \
---config /config/kleio.core/kleio_config.yaml --tags '{experiment};{dataset};{model};{version}'\
+--config /config/kleio.core/kleio_config.yaml \
+--tags '{experiment};{dataset};{model};{execution_version};{analysis_version}'\
 """
 
 commandline_template = "{flow} launch {kleio}"
@@ -29,10 +30,10 @@ def parse_args(argv=None):
     parser.add_argument('--kleio-config', type=argparse.FileType('r'),
                         help="custom configuration for kleio")
     parser.add_argument('--configs', default='configs', help='Root folder for configs')
-    parser.add_argument('--version', required=True, help='Version of the execution')
+    parser.add_argument('--execution-version', required=True, help='Version of the execution')
+    parser.add_argument('--analysis-version', required=True, help='Version of the analysis')
     parser.add_argument('--datasets', nargs="*", help='Datasets to save executions for')
     parser.add_argument('--models', nargs="*", help='Models to save executions for')
-    parser.add_argument('--data-wrapper-levels', nargs="*", help='Noise levels to try')
     # TODO remove print_only, and turn it into a test for kleio, if not using
     # kleio to register this execution, then print-only
     parser.add_argument('--print-only', action='store_true',
@@ -81,7 +82,7 @@ def main(argv=None):
 
     database = TrialBuilder().build_database({'config': args.kleio_config})
     for dataset, model, file_path in iterator:
-        tags = [EXPERIMENT, dataset, model, args.version]
+        tags = [EXPERIMENT, dataset, model, args.execution_version, args.analysis_version]
         query = {
             'tags': {'$all': tags},
             'registry.status': {'$in': status.RESERVABLE}}
@@ -96,14 +97,17 @@ def main(argv=None):
         if not runnable:
             continue
 
-        options = options_template.format(array="array=1-{}".format(min(runnable, 10)))
+        if runnable > 20:
+            options = options_template.format(array="array=1-{};".format(min(runnable / 10, 10)))
+        else:
+            options = options_template.format(array="")
 
         flow = flow_template.format(
             file_path=file_path, container=args.container, options=options,
             optionals=" --generate-only" if args.generate_only else "")
         kleio = kleio_template.format(
             experiment=EXPERIMENT, dataset=dataset, model=model,
-            version=args.version)
+            execution_version=args.execution_version, analysis_version=args.analysis_version)
         commandline = commandline_template.format(flow=flow, kleio=kleio)
         # flow-submit file_path kleio run --tags {experiment};{dataset};{model};{version}
         futures.append(execute(commandline, print_only=args.print_only))

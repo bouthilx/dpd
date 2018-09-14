@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import torch
 from torch.utils.data.dataset import Dataset
 
@@ -34,7 +36,7 @@ class Gaussian(Dataset):
 def build(batch_size, width, classes, size, data_path):
     size *= width
 
-    loaders = {}
+    loaders = OrderedDict()
     for set_name in ['train', 'valid', 'test']:
         dataset = Gaussian(
             width=width, n_classes=classes,

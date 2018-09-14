@@ -1,5 +1,8 @@
 import argparse
 import pprint
+import random
+
+import numpy
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
 from ignite.metrics import CategoricalAccuracy
@@ -25,22 +28,21 @@ def update(config, arguments):
     return merge_configs(config, kwargs)
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description='Script to train a model')
-    parser.add_argument('--config', help='Path to yaml configuration file for the trial')
-    parser.add_argument('--model-seed', type=int, required=True, help='Seed for model\'s initialization')
-    parser.add_argument('--sampler-seed', type=int, required=True, help='Seed for data sampling order')
-    parser.add_argument('--epochs', type=int, required=True, help='number of epochs to train.')
+def build_experiment(**kwargs):
 
-    parser.add_argument('--updates', nargs='+', default=[], metavar='updates',
-                        help='Values to update in the configuration file')
+    if isinstance(kwargs['config'], str):
+        with open(kwargs['config'], 'r') as f:
+            config = yaml.load(f)
+    else:
+        config = kwargs['config']['content']
 
-    args = parser.parse_args(argv)
+    if 'update' in kwargs:
+        kwargs['updates'] = kwargs['update']
 
-    with open(args.config, 'r') as f:
-        config = yaml.load(f)
+    if isinstance(kwargs['updates'] , str):
+        kwargs['updates'] = [kwargs['updates']]
 
-    update(config, args.updates)
+    update(config, kwargs['updates'])
 
     device = torch.device('cpu')
     if torch.cuda.is_available():
@@ -53,11 +55,9 @@ def main(argv=None):
     pprint.pprint(config)
     print("\n\n")
 
-    seed(args.sampler_seed)
+    seed(int(kwargs['sampler_seed']))
 
     dataset = build_dataset(**config['data'])
-    train_loader = dataset['train']
-    valid_loader = dataset['valid']
     input_size = dataset['input_size']
     num_classes = dataset['num_classes']
 
@@ -66,7 +66,7 @@ def main(argv=None):
     print("\n\n")
 
     # Note: model is not loaded here for resumed trials
-    seed(args.model_seed)
+    seed(int(kwargs['model_seed']))
     model = build_model(input_size=input_size, num_classes=num_classes, **config['model'])
 
     print("\n\nModel\n")
@@ -78,6 +78,26 @@ def main(argv=None):
     print("\n\nOptimizer\n")
     pprint.pprint(optimizer)
     print("\n\n")
+
+    return dataset, model, optimizer, device
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description='Script to train a model')
+    parser.add_argument('--config', help='Path to yaml configuration file for the trial')
+    parser.add_argument('--model-seed', type=int, required=True, help='Seed for model\'s initialization')
+    parser.add_argument('--sampler-seed', type=int, required=True, help='Seed for data sampling order')
+    parser.add_argument('--epochs', type=int, required=True, help='number of epochs to train.')
+
+    parser.add_argument('--updates', nargs='+', default=[], metavar='updates',
+                        help='Values to update in the configuration file')
+
+    args = parser.parse_args(argv)
+
+    dataset, model, optimizer, device = build_experiment(**vars(args))
+
+    train_loader = dataset['train']
+    valid_loader = dataset['valid']
 
     trainer = create_supervised_trainer(
         model, optimizer, torch.nn.functional.cross_entropy, device=device)
@@ -91,6 +111,10 @@ def main(argv=None):
             engine.state.epoch = metadata['epoch']
         else:
             save_model(model, 'model', epoch=0)
+
+    @trainer.on(Events.EPOCH_STARTED)
+    def trainer_seeding(engine):
+        seed(args.sampler_seed + engine.state.epoch)
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def trainer_save_model(engine):
@@ -109,6 +133,7 @@ def main(argv=None):
         print("Epoch {:>4} Iteration {:>8} Loss {:>12}".format(engine.state.epoch, engine.state.iteration, engine.state.output))
         save_model(model, 'model', epoch=engine.state.epoch)
 
+    print("Training")
     trainer.run(train_loader, max_epochs=args.epochs)
 
     evaluator.run(valid_loader)
@@ -120,6 +145,12 @@ def main(argv=None):
 
 
 def seed(seed):
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+
+    random.seed(seed)
+    numpy.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
