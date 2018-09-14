@@ -28,7 +28,12 @@ class ComputeMovement(object):
 
         if 'all_parameters' in reference_parameters:
             all_new_parameters = torch.cat(tuple(m.view(-1) for m in new_parameters.values()))
-            diffs['all_parameters'] = all_new_parameters - reference_parameters['all_parameters']
+
+            if 'all_parameters' not in diffs:
+                diffs['all_parameters'] = []
+
+            diffs['all_parameters'].append(all_new_parameters -
+                                           reference_parameters['all_parameters'])
 
         keys = set()
         for key in new_parameters.keys():
