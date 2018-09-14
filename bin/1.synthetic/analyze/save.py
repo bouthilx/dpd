@@ -15,7 +15,7 @@ kleio save --branch-original --config /config/kleio.core/kleio_config.yaml \
 
 script_template = (
     "python3.6 /repos/sgd-space/src/sgdad/analyze.py "
-    "--config={file_path} --trial-id {trial_id} "
+    "--config=/repos/sgd-space/{file_path} --trial-id {trial_id} "
     "--updates query.epoch={epoch}")
 
 commandline_template = "{kleio} {script}"
