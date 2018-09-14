@@ -115,7 +115,8 @@ def main(argv=None):
             continue
 
         select = data_config.pop('select')
-        data_config['name'] = name
+        if 'name' not in data_config:
+            data_config['name'] = name
         analyze_dataset = build_wrapper(dataset, **data_config)
         analyze_data = OrderedDict()
         for set_name in select:

@@ -28,22 +28,21 @@ def update(config, arguments):
     return merge_configs(config, kwargs)
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description='Script to train a model')
-    parser.add_argument('--config', help='Path to yaml configuration file for the trial')
-    parser.add_argument('--model-seed', type=int, required=True, help='Seed for model\'s initialization')
-    parser.add_argument('--sampler-seed', type=int, required=True, help='Seed for data sampling order')
-    parser.add_argument('--epochs', type=int, required=True, help='number of epochs to train.')
+def build_experiment(**kwargs):
 
-    parser.add_argument('--updates', nargs='+', default=[], metavar='updates',
-                        help='Values to update in the configuration file')
+    if isinstance(kwargs['config'], str):
+        with open(kwargs['config'], 'r') as f:
+            config = yaml.load(f)
+    else:
+        config = kwargs['config']['content']
 
-    args = parser.parse_args(argv)
+    if 'update' in kwargs:
+        kwargs['updates'] = kwargs['update']
 
-    with open(args.config, 'r') as f:
-        config = yaml.load(f)
+    if isinstance(kwargs['updates'] , str):
+        kwargs['updates'] = [kwargs['updates']]
 
-    update(config, args.updates)
+    update(config, kwargs['updates'])
 
     device = torch.device('cpu')
     if torch.cuda.is_available():
@@ -56,11 +55,9 @@ def main(argv=None):
     pprint.pprint(config)
     print("\n\n")
 
-    seed(args.sampler_seed)
+    seed(int(kwargs['sampler_seed']))
 
     dataset = build_dataset(**config['data'])
-    train_loader = dataset['train']
-    valid_loader = dataset['valid']
     input_size = dataset['input_size']
     num_classes = dataset['num_classes']
 
@@ -69,7 +66,7 @@ def main(argv=None):
     print("\n\n")
 
     # Note: model is not loaded here for resumed trials
-    seed(args.model_seed)
+    seed(int(kwargs['model_seed']))
     model = build_model(input_size=input_size, num_classes=num_classes, **config['model'])
 
     print("\n\nModel\n")
@@ -81,6 +78,26 @@ def main(argv=None):
     print("\n\nOptimizer\n")
     pprint.pprint(optimizer)
     print("\n\n")
+
+    return dataset, model, optimizer, device
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description='Script to train a model')
+    parser.add_argument('--config', help='Path to yaml configuration file for the trial')
+    parser.add_argument('--model-seed', type=int, required=True, help='Seed for model\'s initialization')
+    parser.add_argument('--sampler-seed', type=int, required=True, help='Seed for data sampling order')
+    parser.add_argument('--epochs', type=int, required=True, help='number of epochs to train.')
+
+    parser.add_argument('--updates', nargs='+', default=[], metavar='updates',
+                        help='Values to update in the configuration file')
+
+    args = parser.parse_args(argv)
+
+    dataset, model, optimizer, device = build_experiment(**vars(args))
+
+    train_loader = dataset['train']
+    valid_loader = dataset['valid']
 
     trainer = create_supervised_trainer(
         model, optimizer, torch.nn.functional.cross_entropy, device=device)

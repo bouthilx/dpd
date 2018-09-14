@@ -9,13 +9,14 @@ data:
             - train
             - valid
             - test
-    shuffling:
+    shuffling10:
+        name: shuffling
         select:
             - train
             - valid
             - test
         target: target
-        level: 0.5
+        level: 1.0
 
 query:
     epoch: 'overwrite-me'
