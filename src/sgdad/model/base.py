@@ -21,7 +21,7 @@ def save_model(model, filename, **metadata):
     kleio_logger.log_artifact(filename, file_like_object, **metadata)
 
 
-def load_model(model, filename, query, logger=None):
+def load_model(model, filename, query={}, logger=None):
     if logger is None:
         print("No logger to load artifacts")
         logger = kleio_logger

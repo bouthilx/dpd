@@ -28,7 +28,12 @@ class ComputeMovement(object):
 
         if 'all_parameters' in reference_parameters:
             all_new_parameters = torch.cat(tuple(m.view(-1) for m in new_parameters.values()))
-            diffs['all_parameters'] = all_new_parameters - reference_parameters
+
+            if 'all_parameters' not in diffs:
+                diffs['all_parameters'] = []
+
+            diffs['all_parameters'].append(all_new_parameters -
+                                           reference_parameters['all_parameters'])
 
         keys = set()
         for key in new_parameters.keys():
@@ -77,8 +82,8 @@ class ComputeMovement(object):
         movements = []
         original_state = copy.deepcopy(model.state_dict())
 
-        reference_function = results['function']['_references']
-        reference_parameters = results['parameters']['_references']
+        reference_function = results['function'].pop('_references')
+        reference_parameters = results['parameters'].pop('_references')
 
         for batch_idx, (data, target) in enumerate(loader):
             data, target = data.to(device), target.to(device)

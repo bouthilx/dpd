@@ -19,25 +19,24 @@ class ComputeParticipationRatio(object):
         for key, value in flatten(self.over).items():
             key = "{}.{}".format(key, value)
             if key not in flat_results and not any(k.startswith(key) for k in flat_results.keys()):
-                import pdb
-                pdb.set_trace()
                 raise RuntimeError("Cannot compute participation_ratio; Canot find "
                                    "prior result {}".format(key))
 
             if key not in flat_results:
-                for flat_key in flat_results.keys():
+                for flat_key in list(flat_results.keys()):
                     if not flat_key.startswith(key):
                         continue
                     subkey = flat_key[len(key) + 1:]
                     eig_key = curate(key + ".participation_ratio" + "." + subkey)
                     participation_ratio[eig_key] = _compute_participation_ratio(
-                        flat_results[flat_key])
+                        flat_results.pop(flat_key))
             else:
                 participation_ratio[curate(key + ".participation_ratio")] = _compute_participation_ratio(
-                    flat_results[key])
+                    flat_results.pop(key))
 
-        flat_results.update(participation_ratio)
-        return unflatten(flat_results)  # participation_ratio)
+        # flat_results.update(participation_ratio)
+        # return unflatten(flat_results)  # participation_ratio)
+        return unflatten(participation_ratio)
 
 
 def curate(key):

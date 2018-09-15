@@ -1,7 +1,9 @@
 data:
-    name: mnist
+    name: gaussian
+    width: 10
+    size: 1000
+    classes: 5
     batch_size: 128
-    num_workers: 1
 
     wrapper:
         name: shuffling
@@ -10,13 +12,10 @@ data:
 
 model:
     name: mlp
-    bias: True
+    bias: False
     layers:
-        - 1000
-        - 500
-        - 300
         - 200
-        - 100
+        - 200
 
 optimizer:
     name: sgd
