@@ -34,11 +34,11 @@ class ComputeEigenValues(object):
             else:
                 eigenvalues[key + "._eigenvalues"] = _compute_eigenvalues(flat_results[key])
                 # Save backup
-                eigenvalues[key + "._"] = flat_results[key]
-                flat_results[key + "._"] = flat_results.pop(key)
+                # eigenvalues[key + "._"] = flat_results[key]
+                # flat_results[key + "._"] = flat_results.pop(key)
 
-        flat_results.update(eigenvalues)
-        return unflatten(flat_results)
+        # flat_results.update(eigenvalues)
+        return unflatten(eigenvalues)
 
 
 def _compute_eigenvalues(data):

@@ -82,8 +82,8 @@ class ComputeMovement(object):
         movements = []
         original_state = copy.deepcopy(model.state_dict())
 
-        reference_function = results['function']['_references']
-        reference_parameters = results['parameters']['_references']
+        reference_function = results['function'].pop('_references')
+        reference_parameters = results['parameters'].pop('_references')
 
         for batch_idx, (data, target) in enumerate(loader):
             data, target = data.to(device), target.to(device)
