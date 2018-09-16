@@ -45,7 +45,8 @@ class ComputeSpectralNorm(object):
         layers_spectral_norm = 1.0
 
         for module in model.named_modules():
-            layers_spectral_norm *= compute_module_spectral_norm(module._parameters['weight'])
+            if module.__class__.__name__ == 'Linear' or module.__class__.__name__ == 'Conv2d':
+                layers_spectral_norm *= compute_module_spectral_norm(module._parameters['weight'])
 
         return torch.sqrt(expectation) * layers_spectral_norm
 
@@ -53,15 +54,13 @@ class ComputeSpectralNorm(object):
         expectation = 0
         for batch_idx, (data, target) in enumerate(loader):
             data, target = data.to(device), target.to(device)
-            model(data)
-            # TODO: In models, save output of each module
+            output = model(data)
             dt_product = 1.0
-            for module in model.named_modules():
-                # Since we only use ReLU for non-linearities, we can use the line below
-                # Note that d_t is computed from layer activations
-                if module.__class__.__name__ == "ReLU":
-                    # TODO: from each activation outputs, get the diagonal matrix of its derivatives
-                    dt_product *= self.compute_module_spectral_norm(module.output) ** 2
+
+            # Since we only use ReLUs for activation functions, the spectral norm of D_t is always 1, except when all
+            # ReLU nodes hae a nul output, in which case the nul signal is propagated until the model output.
+            if output.norm() == 0:
+                dt_product = 0
 
             expectation += (data.norm() ** 2) * dt_product
         return expectation / len(loader)
