@@ -83,9 +83,15 @@ class VGG(nn.Module):
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
             else:
                 conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+                con2d.register_forward_hook(save_computations)
                 if batch_norm:
                     layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
                 else:
                     layers += [conv2d, nn.ReLU(inplace=True)]
                 in_channels = v
         return nn.Sequential(*layers)
+        
+        
+    def save_computations(self, input, output):
+        setattr(self, "input", input)
+        setattr(self, "output", output)
