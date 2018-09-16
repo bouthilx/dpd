@@ -11,6 +11,7 @@ import torch
 
 from sgdad.train import build_experiment, update, seed
 from sgdad.dataset.base import build_dataset, build_wrapper
+from sgdad.dataset.wrapper import infinite
 from sgdad.model.base import build_model, load_model, save_model
 from sgdad.optimizer.base import build_optimizer
 from sgdad.analysis.base import build_analysis
@@ -62,13 +63,15 @@ def main(argv=None):
 
     trial_logger = AnalyzeLogger(args.trial_id)
     trial_args = trial_logger.load_config()
-    # Force num_workers to 0
-    if 'num_workers' in trial_args['config']['content']['data']:
-        trial_args['config']['content']['data']['num_workers'] = 0
 
     print("\n\nTrial logged configuration:\n")
 
     pprint.pprint(trial_args)
+
+    # Force num_workers to 0
+    if 'num_workers' in trial_args['config']['content']['data']:
+        print("Forced num_workers to 0 for reproducibility")
+        trial_args['config']['content']['data']['num_workers'] = 0
 
     # Check if statistic already logged with current tag, if yes, quit.
     # For that, look for query[epoch] and ";".join(kleio_logger.trial.tags)
@@ -103,14 +106,14 @@ def main(argv=None):
 
     seed(int(trial_args['sampler_seed']) + config['query']['epoch'])
 
-    number_of_batches = float('inf')
     loaders = OrderedDict()
+    pump_out_n_batches = config['data'].get('pump_out', None)
     for name, data_config in config['data'].items():
+        print("Preparing {}".format(name))
         if name == "model":
             model_data = OrderedDict()
             for set_name in data_config['select']:
-                model_data[set_name] = [batch for batch in dataset[set_name]]
-                number_of_batches = min(len(model_data[set_name]), number_of_batches)
+                model_data[set_name] = pump_out(dataset[set_name], pump_out_n_batches)
             loaders[trial_config['data']['name']] = model_data
             continue
 
@@ -121,16 +124,15 @@ def main(argv=None):
         analyze_data = OrderedDict()
         for set_name in select:
             # Iterate now to keep same order throughout analyses
-            analyze_data[set_name] = [batch for batch in analyze_dataset[set_name]]
-            number_of_batches = min(len(analyze_data[set_name]), number_of_batches)
+            analyze_data[set_name] = pump_out(analyze_dataset[set_name], pump_out_n_batches)
         loaders[name] = analyze_data
 
-    print("Limiting all datasets to the size of the smallest one, "
-          "giving {} mini-batches".format(number_of_batches))
+    # print("Limiting all datasets to the size of the smallest one, "
+    #       "giving {} mini-batches".format(number_of_batches))
 
-    for name, dataset in loaders.items():
-        for set_name, loader in dataset.items():
-            dataset[set_name] = loader[:number_of_batches]
+    # for name, dataset in loaders.items():
+    #     for set_name, loader in dataset.items():
+    #         dataset[set_name] = loader[:number_of_batches]
 
     print("\n\nAnalyses\n")
     pprint.pprint(config['analyses'])
@@ -183,6 +185,19 @@ def is_hidden(key):
 def curate_key(key):
     return ".".join([name for name in key.split(".") if not is_hidden(name)])
 
+
+def pump_out(loader, number_of_batches):
+    if number_of_batches is None:
+        # TODO: Make this generic to adapt to any datasets
+        return [batch for batch in loader][:78]  # Smaller sets in MNIST and CIFAR10
+
+    batches = []
+    for i, batch in enumerate(infinite.extend(loader)):
+        if i >= number_of_batches:
+            break
+        batches.append(batch)
+
+    return batches
 
 
 if __name__ == "__main__":
