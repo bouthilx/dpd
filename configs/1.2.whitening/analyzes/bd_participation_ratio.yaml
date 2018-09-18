@@ -1,0 +1,26 @@
+data:
+    model:
+        select:
+            - train
+            - valid
+            - test
+    sphericalcow:
+        select:
+            - train
+            - valid
+            - test
+    shuffling10:
+        name: shuffling
+        select:
+            - train
+            - valid
+            - test
+        target: target
+        level: 1.0
+
+query:
+    epoch: 'overwrite-me'
+
+analyses:
+    - bd_participation_ratio:
+        movement_samples: 1000

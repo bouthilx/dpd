@@ -1,0 +1,17 @@
+data:
+    name: wcifar10 
+    batch_size: 128
+    num_workers: 0
+    whitening_level: 'overwrite-me'
+
+model:
+    name: lenet
+
+optimizer:
+    name: sgd
+    lr: 0.001
+    momentum: 0.9
+    weight_decay: 0.0005
+    
+model_seed: 1
+sampler_seed: 1

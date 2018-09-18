@@ -1,0 +1,23 @@
+data:
+    name: wgaussian
+    width: 10
+    size: 1000
+    classes: 5
+    batch_size: 128
+    whitening_level: 'overwrite-me'
+
+model:
+    name: mlp
+    bias: False
+    layers:
+        - 200
+        - 200
+
+optimizer:
+    name: sgd
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 0.0005
+    
+model_seed: 1
+sampler_seed: 1

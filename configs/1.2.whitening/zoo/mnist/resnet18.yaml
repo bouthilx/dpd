@@ -1,0 +1,24 @@
+data:
+    name: wmnist
+    batch_size: 128
+    num_workers: 0
+    whitening_level: 'overwrite-me'
+
+model:
+    name: resnet18
+    conv:
+        kernel_size: 3
+        stride: 1
+        padding: 1
+    maxpool: null
+    avgpool:
+        kernel_size: 4
+
+optimizer:
+    name: sgd
+    lr: 0.005
+    momentum: 0.0
+    weight_decay: 0.0005
+    
+model_seed: 1
+sampler_seed: 1
