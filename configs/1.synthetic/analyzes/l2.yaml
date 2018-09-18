@@ -1,0 +1,10 @@
+data:
+    model:
+        select:
+            - train
+
+query:
+    epoch: 'overwrite-me'
+
+analyses:
+    - l2
