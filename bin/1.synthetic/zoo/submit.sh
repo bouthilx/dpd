@@ -2,7 +2,7 @@
 
 SCRIPT_PATH=$(cd $(dirname "$0") && pwd)
 
-OMP_NUM_THREADS=1
+export OMP_NUM_THREADS=1
 
 EXECUTION_VERSION=$1
 CONTAINER=$2

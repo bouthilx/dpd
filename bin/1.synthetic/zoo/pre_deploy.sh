@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+export OMP_NUM_THREADS=1
+
 CONTAINER=$1
 
 flow-execute $CONTAINER \
