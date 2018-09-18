@@ -60,8 +60,8 @@ class ComputeFisherRaoNorm(object):
         number_of_layers = sum(1 for _ in model.modules())
         coefficient = (number_of_layers + 1) ** 2 / number_of_samples
 
-        return OrderedDict((('fisher_rao_norm.true', coefficient * expectation),
-                            ('fisher_rao_norm.empirical', coefficient * emp_expectation)))
+        return OrderedDict((('fisher_rao_norm.true', (coefficient * expectation).item()),
+                            ('fisher_rao_norm.empirical', (coefficient * emp_expectation).item())))
 
     def true_fisher_rao_norm(self, output, softmax):
         # (b,m)-dim
