@@ -161,4 +161,4 @@ class ComputeFisherRaoNorm(object):
             with torch.no_grad():
                 metric.update_stats(nsamples // batch_size)
 
-        return OrderedDict((('kfac_fisher_rao_norm.empirical', metric.get_norm()), ))
+        return OrderedDict((('kfac_fisher_rao_norm.empirical', metric.get_norm().item()), ))

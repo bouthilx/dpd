@@ -78,6 +78,10 @@ def main(argv=None):
                 file_path=file_path, data_wrapper_level=data_wrapper_level)
             commandline = commandline_template.format(kleio=kleio, script=script)
             futures.append(execute(commandline, print_only=args.print_only))
+            if len(futures) > 10:
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(asyncio.gather(*futures))
+                futures = []
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(*futures))

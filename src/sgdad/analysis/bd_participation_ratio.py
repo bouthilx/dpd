@@ -163,5 +163,5 @@ class ComputeBlockDiagonalParticipationRatio(object):
 
         function_pr, parameter_pr = self.main_loop()
 
-        return {'parameters': {'participation_ratio': {'block_diagonal': parameter_pr}},
-                'function': {'participation_ratio': {'full': function_pr}}}
+        return {'parameters': {'participation_ratio': {'block_diagonal': parameter_pr.item()}},
+                'function': {'participation_ratio': {'full': function_pr.item()}}}
