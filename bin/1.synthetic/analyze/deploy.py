@@ -111,6 +111,10 @@ def main(argv=None):
         commandline = commandline_template.format(flow=flow, kleio=kleio)
         # flow-submit file_path kleio run --tags {experiment};{dataset};{model};{version}
         futures.append(execute(commandline, print_only=args.print_only))
+        if len(futures) > 10:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.gather(*futures))
+            futures = []
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(*futures))
