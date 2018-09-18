@@ -98,7 +98,7 @@ def main(argv=None):
             continue
 
         if runnable > 20:
-            options = options_template.format(array="array=1-{};".format(min(runnable / 10, 10)))
+            options = options_template.format(array="array=1-{};".format(min(runnable // 10, 10)))
         else:
             options = options_template.format(array="")
 
