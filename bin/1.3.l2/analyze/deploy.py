@@ -82,7 +82,8 @@ def main(argv=None):
 
     database = TrialBuilder().build_database({'config': args.kleio_config})
     for dataset, model, file_path in iterator:
-        tags = [EXPERIMENT, dataset, model, args.execution_version, args.analysis_version]
+        tags = ([EXPERIMENT, dataset, model, args.execution_version] +
+                args.analysis_version.split(";"))
         query = {
             'tags': {'$all': tags},
             'registry.status': {'$in': status.RESERVABLE}}
