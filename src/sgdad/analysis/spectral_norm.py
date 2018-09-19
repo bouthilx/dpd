@@ -51,11 +51,16 @@ class ComputeSpectralNorm(object):
         return torch.sqrt(expectation) * layers_spectral_norm
 
     def compute_expectation(self, loader, model, device):
-        expectation = 0
+        expectation = 0.0
+        n_samples = 0
         for batch_idx, (data, target) in enumerate(loader):
             data, target = data.to(device), target.to(device)
             output = model(data)
-            dt_product = 1.0
+
+            dt_product = (torch.norm(output, 2, 1) == 0).type(output.type())
+            expectation += ((torch.norm(data, 2, 1) ** 2) * dt_product).sum()
+            n_samples += data.size(0)
+        return expectation / n_samples
 
             # Since we only use ReLUs for activation functions, the spectral norm of D_t is always 1, except when all
             # ReLU nodes hae a nul output, in which case the nul signal is propagated until the model output.
