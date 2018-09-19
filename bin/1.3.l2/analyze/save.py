@@ -93,7 +93,10 @@ def parse_epochs(string):
 def fetch_trial_ids(database, dataset, model, version):
     tags = [EXPERIMENT, dataset, model, version]
     query = {
-        'tags': {'$all': tags},
+        '$and': [
+            {'tags': {'$all': tags}},
+            {'tags': {'$size': len(tags)}}
+        ],
         'registry.status': {'$eq': 'completed'}}
 
     for trial_doc in database.read('trials.reports', query):
