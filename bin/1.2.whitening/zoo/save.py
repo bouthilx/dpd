@@ -39,7 +39,7 @@ def parse_args(argv=None):
 def get_instances(configs_root, datasets, models, experiment):
     possible_datasets = [dataset for dataset
                          in os.listdir(os.path.join(configs_root, experiment))
-                         if os.path.isdir(os.path.join(configs_root, experiment, dataset))]
+                         if os.path.isdir(os.path.join(configs_root, experiment, 'zoo', dataset))]
 
     for dataset in possible_datasets:
 
