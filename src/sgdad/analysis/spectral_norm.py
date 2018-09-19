@@ -57,19 +57,10 @@ class ComputeSpectralNorm(object):
             data, target = data.to(device), target.to(device)
             output = model(data)
 
-            dt_product = (torch.norm(output, 2, 1) == 0).type(output.type())
+            dt_product = (torch.norm(output, 2, 1) != 0).type(output.type())
             expectation += ((torch.norm(data, 2, 1) ** 2) * dt_product).sum()
             n_samples += data.size(0)
         return expectation / n_samples
-
-            # Since we only use ReLUs for activation functions, the spectral norm of D_t is always 1, except when all
-            # ReLU nodes hae a nul output, in which case the nul signal is propagated until the model output.
-            if output.norm() == 0:
-                dt_product = 0
-
-            expectation += (data.norm() ** 2) * dt_product
-        return expectation / len(loader)
-
 
     def compute_module_spectral_norm(self, weight_layer):
         n_power_iterations = self.n_power_iterations
