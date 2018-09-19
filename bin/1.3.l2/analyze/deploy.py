@@ -46,8 +46,8 @@ def parse_args(argv=None):
 
 def get_instances(configs_root, datasets, models, experiment):
     possible_datasets = [dataset for dataset
-                         in os.listdir(os.path.join(configs_root, experiment))
-                         if os.path.isdir(os.path.join(configs_root, experiment, dataset))]
+                         in os.listdir(os.path.join(configs_root, experiment, 'zoo'))
+                         if os.path.isdir(os.path.join(configs_root, experiment, 'zoo', dataset))]
 
     for dataset in possible_datasets:
 
@@ -55,7 +55,7 @@ def get_instances(configs_root, datasets, models, experiment):
             continue
 
         possible_models = [model[:-5] for model
-                           in os.listdir(os.path.join(configs_root, experiment, dataset))
+                           in os.listdir(os.path.join(configs_root, experiment, 'zoo', dataset))
                            if model.split(".")[-1] == "yaml"]
 
         for model in possible_models:
