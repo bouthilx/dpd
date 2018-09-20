@@ -7,7 +7,7 @@ from kleio.core.io.trial_builder import TrialBuilder
 from sgdad.utils.commandline import execute
 
 
-EXPERIMENT = "synthetic"
+EXPERIMENT = "whitening"
 
 kleio_template = """\
 kleio save --branch-original --config /config/kleio.core/kleio_config.yaml \
@@ -113,7 +113,7 @@ def main(argv=None):
     # if not epochs:
     #     epochs = [i / 10. for i in range(0, 11)]
 
-    iterator = get_instances(args.configs, args.datasets, args.models, "1.synthetic")
+    iterator = get_instances(args.configs, args.datasets, args.models, "1.2.whitening")
     futures = []
     for dataset, model in iterator:
         for trial_id in fetch_trial_ids(database, dataset, model, args.execution_version):
