@@ -98,6 +98,7 @@ def main(argv=None):
 
     train_loader = dataset['train']
     valid_loader = dataset['valid']
+    test_loader = dataset['test']
 
     trainer = create_supervised_trainer(
         model, optimizer, torch.nn.functional.cross_entropy, device=device)
@@ -118,16 +119,22 @@ def main(argv=None):
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def trainer_save_model(engine):
-        acc = evaluator.run(valid_loader).metrics['accuracy']
+        train_acc = evaluator.run(train_loader).metrics['accuracy']
+        valid_acc = evaluator.run(valid_loader).metrics['accuracy']
+        test_acc = evaluator.run(test_loader).metrics['accuracy']
 
         kleio_logger.log_statistic(**{
             'epoch': engine.state.epoch,
-            'valid': dict(
-                error_rate=1. - acc
-            ),
             'train': dict(
-                loss=engine.state.output
-            )
+                loss=engine.state.output,
+                error_rate=1. - train_acc
+            ),
+            'valid': dict(
+                error_rate=1. - valid_acc
+            ),
+            'test': dict(
+                error_rate=1. - test_acc
+            ),
         })
 
         print("Epoch {:>4} Iteration {:>8} Loss {:>12}".format(engine.state.epoch, engine.state.iteration, engine.state.output))
