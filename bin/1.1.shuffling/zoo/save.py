@@ -5,7 +5,7 @@ import os
 from sgdad.utils.commandline import execute
 
 
-EXPERIMENT = "synthetic"
+EXPERIMENT = "shuffling"
 
 kleio_template = 'kleio save --branch-original --config /config/kleio.core/kleio_config.yaml --tags {experiment};{dataset};{model};{version}'
 
@@ -38,8 +38,8 @@ def parse_args(argv=None):
 
 def get_instances(configs_root, datasets, models, experiment):
     possible_datasets = [dataset for dataset
-                         in os.listdir(os.path.join(configs_root, experiment))
-                         if os.path.isdir(os.path.join(configs_root, experiment, dataset))]
+                         in os.listdir(os.path.join(configs_root, experiment, 'zoo'))
+                         if os.path.isdir(os.path.join(configs_root, experiment, 'zoo', dataset))]
 
     for dataset in possible_datasets:
 
@@ -47,7 +47,7 @@ def get_instances(configs_root, datasets, models, experiment):
             continue
 
         possible_models = [model[:-5] for model 
-                           in os.listdir(os.path.join(configs_root, experiment, dataset))
+                           in os.listdir(os.path.join(configs_root, experiment, 'zoo', dataset))
                            if model.split(".")[-1] == "yaml"]
 
         for model in possible_models:
@@ -55,7 +55,7 @@ def get_instances(configs_root, datasets, models, experiment):
             if models and model not in models:
                 continue
 
-            file_path = os.path.join(configs_root, experiment, dataset, model + ".yaml")
+            file_path = os.path.join(configs_root, experiment, 'zoo', dataset, model + ".yaml")
 
             yield dataset, model, file_path
 
@@ -68,7 +68,7 @@ def main(argv=None):
     if not data_wrapper_levels:
         data_wrapper_levels = [i / 10. for i in range(0, 11)]
 
-    iterator = get_instances(args.configs, args.datasets, args.models, "1.synthetic")
+    iterator = get_instances(args.configs, args.datasets, args.models, "1.1.shuffling")
     futures = []
     for dataset, model, file_path in iterator:
         for data_wrapper_level in data_wrapper_levels:

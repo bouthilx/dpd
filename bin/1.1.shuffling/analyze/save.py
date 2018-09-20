@@ -7,7 +7,7 @@ from kleio.core.io.trial_builder import TrialBuilder
 from sgdad.utils.commandline import execute
 
 
-EXPERIMENT = "synthetic"
+EXPERIMENT = "shuffling"
 
 kleio_template = """\
 kleio save --branch-original --config /config/kleio.core/kleio_config.yaml \
@@ -60,8 +60,8 @@ def parse_args(argv=None):
 
 def get_instances(configs_root, datasets, models, experiment):
     possible_datasets = [dataset for dataset
-                         in os.listdir(os.path.join(configs_root, experiment))
-                         if os.path.isdir(os.path.join(configs_root, experiment, dataset))]
+                         in os.listdir(os.path.join(configs_root, experiment, 'zoo'))
+                         if os.path.isdir(os.path.join(configs_root, experiment, 'zoo', dataset))]
 
     for dataset in possible_datasets:
 
@@ -69,7 +69,7 @@ def get_instances(configs_root, datasets, models, experiment):
             continue
 
         possible_models = [model[:-5] for model
-                           in os.listdir(os.path.join(configs_root, experiment, dataset))
+                           in os.listdir(os.path.join(configs_root, experiment, 'zoo', dataset))
                            if model.split(".")[-1] == "yaml"]
 
         for model in possible_models:
@@ -110,7 +110,7 @@ def main(argv=None):
     # if not epochs:
     #     epochs = [i / 10. for i in range(0, 11)]
 
-    iterator = get_instances(args.configs, args.datasets, args.models, "1.synthetic")
+    iterator = get_instances(args.configs, args.datasets, args.models, "1.1.shuffling")
     futures = []
     for dataset, model in iterator:
         for trial_id in fetch_trial_ids(database, dataset, model, args.execution_version):

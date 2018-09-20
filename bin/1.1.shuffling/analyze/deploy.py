@@ -9,7 +9,7 @@ from sgdad.utils.commandline import execute
 
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-EXPERIMENT = "synthetic"
+EXPERIMENT = "shuffling"
 
 options_template = "{array}mem=30000M;time=2:59:00"
 
@@ -46,8 +46,8 @@ def parse_args(argv=None):
 
 def get_instances(configs_root, datasets, models, experiment):
     possible_datasets = [dataset for dataset
-                         in os.listdir(os.path.join(configs_root, experiment))
-                         if os.path.isdir(os.path.join(configs_root, experiment, dataset))]
+                         in os.listdir(os.path.join(configs_root, experiment, 'zoo'))
+                         if os.path.isdir(os.path.join(configs_root, experiment, 'zoo', dataset))]
 
     for dataset in possible_datasets:
 
@@ -55,7 +55,7 @@ def get_instances(configs_root, datasets, models, experiment):
             continue
 
         possible_models = [model[:-5] for model
-                           in os.listdir(os.path.join(configs_root, experiment, dataset))
+                           in os.listdir(os.path.join(configs_root, experiment, 'zoo', dataset))
                            if model.split(".")[-1] == "yaml"]
 
         for model in possible_models:
@@ -77,7 +77,7 @@ def main(argv=None):
 
     args = parse_args(argv)
 
-    iterator = get_instances(args.configs, args.datasets, args.models, "1.synthetic")
+    iterator = get_instances(args.configs, args.datasets, args.models, "1.1.shuffling")
     futures = []
 
     database = TrialBuilder().build_database({'config': args.kleio_config})
