@@ -70,7 +70,8 @@ class ComputeFisherRaoNorm(object):
 
     def empirical_fisher_rao_norm(self, output, softmax, target):
         # (b)-dim
-        diff = (softmax * output).sum(1) - output[torch.arange(output.size(0)), target]
+        target_specific_output = output[torch.arange(output.size(0)).type(target.type()), target]
+        diff = (softmax * output).sum(1) - target_specific_output
         return (diff * diff).sum()
 
     def verify_model(self, model):
