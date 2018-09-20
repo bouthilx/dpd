@@ -11,7 +11,7 @@ EXPERIMENT = "l2"
 
 kleio_template = """\
 kleio save --branch-original --config /config/kleio.core/kleio_config.yaml \
---tags {experiment};{dataset};{model};{version};{analysis_version}"""
+--tags {experiment};{dataset};{model};{analysis_version}"""
 
 script_template = (
     "python3.6 /repos/sgd-space/src/sgdad/analyze.py "
@@ -115,20 +115,24 @@ def main(argv=None):
 
     iterator = get_instances(args.configs, args.datasets, args.models, "1.3.l2")
     futures = []
+    commandlines = []
     for dataset, model in iterator:
         for trial_id in fetch_trial_ids(database, dataset, model, args.execution_version):
             for epoch in epochs:
                 kleio = kleio_template.format(
                     experiment=EXPERIMENT, dataset=dataset, model=model,
-                    version=args.execution_version, analysis_version=args.analysis_version)
+                    analysis_version=args.analysis_version)
                 script = script_template.format(
                     file_path=args.config, epoch=epoch, trial_id=trial_id)
                 commandline = commandline_template.format(kleio=kleio, script=script)
-                futures.append(execute(commandline, print_only=args.print_only))
-                if len(futures) > 10:
-                    loop = asyncio.get_event_loop()
-                    loop.run_until_complete(asyncio.gather(*futures))
-                    futures = []
+                commandlines.append(commandline)
+
+    for commandline in commandlines:
+        futures.append(execute(commandline, print_only=args.print_only))
+        if len(futures) > 15:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.gather(*futures))
+            futures = []
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(*futures))
