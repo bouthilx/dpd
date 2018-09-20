@@ -28,17 +28,14 @@ class ComputeSpectralNorm(object):
 
         # Dt() define below eq (3.4)
 
-        with torch.no_grads():
+        with torch.no_grad():
 
-            spectral_norm = self.compute_spectral_norm(loader, model, device)
+            spectral_norm = self.compute_model_spectral_norm(loader, model, device)
 
         return {'spectral_norm': spectral_norm}
 
 
     def compute_model_spectral_norm(self, loader, model, device):
-
-        # Raise RuntimeError if analysis cannot be executed on such model architecture.
-        self.verify_model(model)
 
         expectation = self.compute_expectation(loader, model, device)
 
@@ -56,9 +53,10 @@ class ComputeSpectralNorm(object):
         for batch_idx, (data, target) in enumerate(loader):
             data, target = data.to(device), target.to(device)
             output = model(data)
+            flattened_data = data.view(data.size(0), -1)
 
             dt_product = (torch.norm(output, 2, 1) != 0).type(output.type())
-            expectation += ((torch.norm(data, 2, 1) ** 2) * dt_product).sum()
+            expectation += ((torch.norm(flattened_data, 2, 1) ** 2) * dt_product).sum()
             n_samples += data.size(0)
         return expectation / n_samples
 
@@ -84,16 +82,3 @@ class ComputeSpectralNorm(object):
                 u = normalize(torch.matmul(weight_mat, v), dim=0, eps=_eps)
         sigma = torch.dot(u, torch.matmul(weight_mat, v))
         return sigma
-
-    def verify_model(self, model):
-
-        def is_not_supported(module):
-            has_bias = getattr(module, 'bias', None) is not None
-            has_conv = module.__class__.__name__ == "Conv2d"
-            # Bah, there is nothing else than ReLU in our models, lets be lazy.
-            has_non_relu = False
-            return has_bias or has_conv or has_non_relu
-
-        for module in model.named_modules():
-            if is_not_supported(module):
-                raise RuntimeError(TOO_COMPLEX_MODEL_ERROR)
