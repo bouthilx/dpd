@@ -17,4 +17,4 @@ bash $SCRIPT_PATH/pre_deploy.sh bouthilx/sgd-space-hub:$CONTAINER \
     ${@:5}
     
 bash $SCRIPT_PATH/deploy.sh bouthilx/sgd-space-hub:$CONTAINER \
-    --execution-version ${EXECUTION_VERSION} --analysis-version ${ANALYSIS_VERSION}
+    --analysis-version ${ANALYSIS_VERSION}

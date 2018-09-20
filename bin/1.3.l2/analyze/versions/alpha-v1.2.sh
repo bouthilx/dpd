@@ -65,4 +65,4 @@ ANALYSIS_CONF=configs/1.3.l2/analyzes/l2.yaml
 
 
 ./bin/1.3.l2/analyze/deploy.sh bouthilx/sgd-space-hub:$CONTAINER \
-    --execution-version ${EXECUTION_VERSION} --analysis-version ${ANALYSIS_VERSION} --print-only
+    --analysis-version ${ANALYSIS_VERSION}

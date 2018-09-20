@@ -18,7 +18,7 @@ flow_template = "flow-submit {container} --config {file_path} --options {options
 kleio_template = """\
 kleio run --allow-host-change \
 --config /config/kleio.core/kleio_config.yaml \
---tags {experiment};{dataset};{model};{execution_version};{analysis_version}\
+--tags {experiment};{dataset};{model};{analysis_version}\
 """
 
 commandline_template = "{flow} launch {kleio}"
@@ -30,7 +30,6 @@ def parse_args(argv=None):
     parser.add_argument('--kleio-config', type=argparse.FileType('r'),
                         help="custom configuration for kleio")
     parser.add_argument('--configs', default='configs', help='Root folder for configs')
-    parser.add_argument('--execution-version', required=True, help='Version of the execution')
     parser.add_argument('--analysis-version', required=True, help='Version of the analysis')
     parser.add_argument('--datasets', nargs="*", help='Datasets to save executions for')
     parser.add_argument('--models', nargs="*", help='Models to save executions for')
@@ -82,8 +81,7 @@ def main(argv=None):
 
     database = TrialBuilder().build_database({'config': args.kleio_config})
     for dataset, model, file_path in iterator:
-        tags = ([EXPERIMENT, dataset, model, args.execution_version] +
-                args.analysis_version.split(";"))
+        tags = ([EXPERIMENT, dataset, model] + args.analysis_version.split(";"))
         query = {
             'tags': {'$all': tags},
             'registry.status': {'$in': status.RESERVABLE}}
@@ -108,7 +106,7 @@ def main(argv=None):
             optionals=" --generate-only" if args.generate_only else "")
         kleio = kleio_template.format(
             experiment=EXPERIMENT, dataset=dataset, model=model,
-            execution_version=args.execution_version, analysis_version=args.analysis_version)
+            analysis_version=args.analysis_version)
         commandline = commandline_template.format(flow=flow, kleio=kleio)
         # flow-submit file_path kleio run --tags {experiment};{dataset};{model};{version}
         futures.append(execute(commandline, print_only=args.print_only))
