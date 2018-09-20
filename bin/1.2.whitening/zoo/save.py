@@ -12,7 +12,7 @@ kleio_template = 'kleio save --branch-original --config /config/kleio.core/kleio
 script_template = (
     "python3.6 /repos/sgd-space/src/sgdad/train.py --config={file_path} "
     "--model-seed 1 --sampler-seed 1 --epochs 300 "
-    "--update data.whitening_level={data_whitening_level}")
+    "--update data.epsilon={data_whitening_epsilon}")
 
 commandline_template = "{kleio} {script}"
 
@@ -27,7 +27,7 @@ def parse_args(argv=None):
     parser.add_argument('--version', required=True, help='Version of the execution')
     parser.add_argument('--datasets', nargs="*", help='Datasets to save executions for')
     parser.add_argument('--models', nargs="*", help='Models to save executions for')
-    parser.add_argument('--data-whitening-levels', nargs="*", help='Noise levels to try')
+    parser.add_argument('--data-whitening-epsilons', nargs="*", help='Epsilons to try')
     # TODO remove print_only, and turn it into a test for kleio, if not using
     # kleio to register this execution, then print-only
     parser.add_argument('--print-only', action='store_true',
@@ -64,24 +64,28 @@ def main(argv=None):
 
     args = parse_args(argv)
 
-    data_whitening_levels = args.data_whitening_levels
-    if not data_whitening_levels:
-        data_whitening_levels = [i / 10. for i in range(0, 11)]
+    data_whitening_epsilons = args.data_whitening_epsilons
+    if not data_whitening_epsilons:
+        data_whitening_epsilons = [1.0, 0.1, 0.01]
 
     iterator = get_instances(args.configs, args.datasets, args.models, "1.2.whitening")
     futures = []
+    commandlines = []
     for dataset, model, file_path in iterator:
-        for data_whitening_level in data_whitening_levels:
+        for data_whitening_epsilon in data_whitening_epsilons:
             kleio = kleio_template.format(
                 experiment=EXPERIMENT, dataset=dataset, model=model, version=args.version)
             script = script_template.format(
-                file_path=file_path, data_whitening_level=data_whitening_level)
+                file_path=file_path, data_whitening_epsilon=data_whitening_epsilon)
             commandline = commandline_template.format(kleio=kleio, script=script)
-            futures.append(execute(commandline, print_only=args.print_only))
-            if len(futures) > 10:
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(asyncio.gather(*futures))
-                futures = []
+            commandlines.append(commandline)
+
+    for commandline in commandlines:
+        futures.append(execute(commandline, print_only=args.print_only))
+        if len(futures) > 15:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.gather(*futures))
+            futures = []
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(*futures))

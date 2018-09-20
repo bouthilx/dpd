@@ -2,7 +2,7 @@ data:
     name: wmnist
     batch_size: 128
     num_workers: 0
-    whitening_level: 'overwrite-me'
+    epsilon: 'overwrite-me'
 
 model:
     name: vgg19
