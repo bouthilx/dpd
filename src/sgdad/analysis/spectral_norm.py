@@ -32,7 +32,7 @@ class ComputeSpectralNorm(object):
 
             spectral_norm = self.compute_model_spectral_norm(loader, model, device)
 
-        return {'spectral_norm': spectral_norm}
+        return {'spectral_norm': spectral_norm.item()}
 
 
     def compute_model_spectral_norm(self, loader, model, device):
