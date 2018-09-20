@@ -55,7 +55,7 @@ def get_instances(configs_root, datasets, models, experiment):
             if models and model not in models:
                 continue
 
-            file_path = os.path.join(configs_root, experiment, dataset, model + ".yaml")
+            file_path = os.path.join(configs_root, experiment, 'zoo', dataset, model + ".yaml")
 
             yield dataset, model, file_path
 
