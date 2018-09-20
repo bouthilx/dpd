@@ -4,12 +4,6 @@ import torchvision
 import torchvision.transforms as transforms
 
 
-def apply_GCN(data):
-    data -= data.mean(dim=1, keepdim=True)
-    data /= (data.var(dim=1, keepdim=True) + 1e-6) ** 0.5
-    return data
-
-
 def get_ZCA(data, epsilon):
     mu = data.mean(dim=0)
     data = data - mu
@@ -34,11 +28,11 @@ def whiten_mnist(data_path, out_path, epsilon):
 
     # Prepare the loaders
     trainset = torchvision.datasets.MNIST(root=data_path, train=True,
-                                            download=False,
-                                            transform=transforms.ToTensor())
+                                          download=False,
+                                          transform=transforms.ToTensor())
     testset = torchvision.datasets.MNIST(root=data_path, train=False,
-                                           download=False,
-                                           transform=transforms.ToTensor())
+                                         download=False,
+                                         transform=transforms.ToTensor())
 
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=60000)
     testloader = torch.utils.data.DataLoader(testset, batch_size=10000)
@@ -54,11 +48,6 @@ def whiten_mnist(data_path, out_path, epsilon):
     for d, l in testloader:
         test_data, test_labels = d, l
     test_data = test_data.view(10000, -1)
-
-    # Apply GCN (like in the Maxout paper)
-    train_data = apply_GCN(train_data)
-    valid_data = apply_GCN(valid_data)
-    test_data = apply_GCN(test_data)
 
     # Get the ZCA parameters
     mu, icov = get_ZCA(train_data, epsilon)
