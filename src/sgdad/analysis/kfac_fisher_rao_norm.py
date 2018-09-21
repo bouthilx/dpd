@@ -152,10 +152,12 @@ class ComputeFisherRaoNorm(object):
 
         metric = FisherRaoNormKFAC(model)
 
-        for batch_idx, (data, _) in enumerate(loader):
-            data = data.to(device)
+        criterion = torch.nn.CrossEntropyLoss()
+
+        for batch_idx, (data, target) in enumerate(loader):
+            data, target = data.to(device), target.to(device)
             output = model.forward(data)
-            loss = output.sum()
+            loss = criterion(output, target)
             loss.backward()
             # Note there is no optimizer step here.
             with torch.no_grad():
