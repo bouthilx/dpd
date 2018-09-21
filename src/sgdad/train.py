@@ -23,6 +23,9 @@ from sgdad.model.base import build_model, load_model, save_model
 from sgdad.optimizer.base import build_optimizer
 
 
+EPOCS_TO_SAVE = list(range(6)) + [10, 15, 20, 25, 50, 75, 100, 150, 200, 250, 300]
+
+
 def update(config, arguments):
     pairs = [argument.split("=") for argument in arguments]
     kwargs = unflatten(dict((pair[0], eval(pair[1])) for pair in pairs))
@@ -146,7 +149,8 @@ def main(argv=None):
         })
 
         print("Epoch {:>4} Iteration {:>8} Loss {:>12}".format(engine.state.epoch, engine.state.iteration, engine.state.output))
-        save_model(model, 'model', epoch=engine.state.epoch)
+        if engine.state.epoch in EPOCS_TO_SAVE: 
+            save_model(model, 'model', epoch=engine.state.epoch)
 
     print("Training")
     trainer.run(train_loader, max_epochs=args.epochs)
