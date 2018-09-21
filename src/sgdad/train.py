@@ -111,7 +111,10 @@ def main(argv=None):
         if metadata:
             engine.state.epoch = metadata['epoch']
         else:
-            save_model(model, 'model', epoch=0)
+            engine.state.epoch = 0
+            engine.stats.iteration = 0
+            engine.state.output = 0.0
+            trainer_save_model(engine)
 
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
