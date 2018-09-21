@@ -1,4 +1,5 @@
 data:
+    pump_out: 1000
     model:
         select:
             - train
