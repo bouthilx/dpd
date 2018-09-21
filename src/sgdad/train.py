@@ -5,7 +5,7 @@ import random
 import numpy
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
-from ignite.metrics import CategoricalAccuracy
+from ignite.metrics import CategoricalAccuracy, Loss
 
 from kleio.core.io.resolve_config import merge_configs
 from kleio.core.utils import unflatten
@@ -15,6 +15,7 @@ from kleio.client.logger import kleio_logger
 from orion.client import report_results
 
 import torch
+import torch.nn.functional as F
 
 import yaml
 from sgdad.dataset.base import build_dataset
@@ -103,7 +104,9 @@ def main(argv=None):
     trainer = create_supervised_trainer(
         model, optimizer, torch.nn.functional.cross_entropy, device=device)
     evaluator = create_supervised_evaluator(
-        model, metrics={'accuracy': CategoricalAccuracy()}, device=device)
+        model, metrics={'accuracy': CategoricalAccuracy(),
+                        'nll': Loss(F.cross_entropy)},
+        device=device)
 
     @trainer.on(Events.STARTED)
     def trainer_load_model(engine):
@@ -112,7 +115,7 @@ def main(argv=None):
             engine.state.epoch = metadata['epoch']
         else:
             engine.state.epoch = 0
-            engine.stats.iteration = 0
+            engine.state.iteration = 0
             engine.state.output = 0.0
             trainer_save_model(engine)
 
@@ -122,21 +125,23 @@ def main(argv=None):
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def trainer_save_model(engine):
-        train_acc = evaluator.run(train_loader).metrics['accuracy']
-        valid_acc = evaluator.run(valid_loader).metrics['accuracy']
-        test_acc = evaluator.run(test_loader).metrics['accuracy']
+        train_metrics = evaluator.run(train_loader).metrics
+        valid_metrics = evaluator.run(valid_loader).metrics
+        test_metrics = evaluator.run(test_loader).metrics
 
         kleio_logger.log_statistic(**{
             'epoch': engine.state.epoch,
             'train': dict(
-                loss=engine.state.output,
-                error_rate=1. - train_acc
+                loss=train_metrics['nll'],
+                error_rate=1. - train_metrics['accuracy']
             ),
             'valid': dict(
-                error_rate=1. - valid_acc
+                loss=valid_metrics['nll'],
+                error_rate=1. - valid_metrics['accuracy']
             ),
             'test': dict(
-                error_rate=1. - test_acc
+                loss=test_metrics['nll'],
+                error_rate=1. - test_metrics['accuracy']
             ),
         })
 
