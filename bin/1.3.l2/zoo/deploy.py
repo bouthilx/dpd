@@ -17,7 +17,7 @@ flow_template = "flow-submit {container} --config {file_path} --options {options
 
 kleio_template = """\
 kleio run --allow-host-change \
---config /config/kleio.core/kleio_config.yaml --tags {experiment};{dataset};{model};{version}\
+--config /config/kleio.core/kleio_config.yaml --tags execution;{experiment};{dataset};{model};{version}\
 """
 
 commandline_template = "{flow} launch {kleio}"

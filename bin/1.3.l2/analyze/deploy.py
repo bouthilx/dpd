@@ -18,7 +18,7 @@ flow_template = "flow-submit {container} --config {file_path} --options {options
 kleio_template = """\
 kleio run --allow-host-change \
 --config /config/kleio.core/kleio_config.yaml \
---tags {experiment};{dataset};{model};{analysis_version}\
+--tags analysis;{experiment};{dataset};{model};{analysis_version}\
 """
 
 commandline_template = "{flow} launch {kleio}"
@@ -81,7 +81,7 @@ def main(argv=None):
 
     database = TrialBuilder().build_database({'config': args.kleio_config})
     for dataset, model, file_path in iterator:
-        tags = ([EXPERIMENT, dataset, model] + args.analysis_version.split(";"))
+        tags = (args.analysis_version.split(";") + [EXPERIMENT, dataset, model, 'analysis'])
         query = {
             'tags': {'$all': tags},
             'registry.status': {'$in': status.RESERVABLE}}

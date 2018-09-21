@@ -11,7 +11,7 @@ EXPERIMENT = "shuffling"
 
 kleio_template = """\
 kleio save --branch-original --config /config/kleio.core/kleio_config.yaml \
---tags {experiment};{dataset};{model};{analysis_version};epoch-{epoch}"""
+--tags analysis;{experiment};{dataset};{model};{analysis_version};epoch-{epoch}"""
 
 script_template = (
     "python3.6 /repos/sgd-space/src/sgdad/analyze.py "
@@ -91,12 +91,9 @@ def parse_epochs(string):
 
 
 def fetch_trial_ids(database, dataset, model, version):
-    tags = [EXPERIMENT, dataset, model, version]
+    tags = [EXPERIMENT, dataset, model, version, 'execution']
     query = {
-        '$and': [
-            {'tags': {'$all': tags}},
-            {'tags': {'$size': len(tags)}}
-        ],
+        'tags': {'$all': tags},
         'registry.status': {'$eq': 'completed'}}
 
     for trial_doc in database.read('trials.reports', query):
