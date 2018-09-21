@@ -107,7 +107,7 @@ def main(argv=None):
     seed(int(trial_args['sampler_seed']) + config['query']['epoch'])
 
     loaders = OrderedDict()
-    pump_out_n_batches = config['data'].get('pump_out', None)
+    pump_out_n_batches = config['data'].pop('pump_out', None)
     for name, data_config in config['data'].items():
         print("Preparing {}".format(name))
         if name == "model":
