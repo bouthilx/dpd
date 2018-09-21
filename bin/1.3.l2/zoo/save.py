@@ -7,7 +7,9 @@ from sgdad.utils.commandline import execute
 
 EXPERIMENT = "l2"
 
-kleio_template = 'kleio save --branch-original --config /config/kleio.core/kleio_config.yaml --tags {experiment};{dataset};{model};{version}'
+kleio_template = """\
+kleio save --branch-original --config /config/kleio.core/kleio_config.yaml \
+--tags execution;{experiment};{dataset};{model};{version};l2-level-{l2_level}"""
 
 script_template = (
     "python3.6 /repos/sgd-space/src/sgdad/train.py --config={file_path} "
@@ -73,7 +75,8 @@ def main(argv=None):
     for dataset, model, file_path in iterator:
         for l2_level in l2_levels:
             kleio = kleio_template.format(
-                experiment=EXPERIMENT, dataset=dataset, model=model, version=args.version)
+                experiment=EXPERIMENT, dataset=dataset, model=model, version=args.version,
+                l2_level=l2_level)
             script = script_template.format(
                 file_path=file_path, l2_level=l2_level)
             commandline = commandline_template.format(kleio=kleio, script=script)

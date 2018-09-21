@@ -7,7 +7,9 @@ from sgdad.utils.commandline import execute
 
 EXPERIMENT = "whitening"
 
-kleio_template = 'kleio save --branch-original --config /config/kleio.core/kleio_config.yaml --tags {experiment};{dataset};{model};{version}'
+kleio_template = """\
+kleio save --branch-original --config /config/kleio.core/kleio_config.yaml \
+--tags execution;{experiment};{dataset};{model};{version};epsilon-{epsilon}"""
 
 script_template = (
     "python3.6 /repos/sgd-space/src/sgdad/train.py --config={file_path} "
@@ -74,7 +76,8 @@ def main(argv=None):
     for dataset, model, file_path in iterator:
         for data_whitening_epsilon in data_whitening_epsilons:
             kleio = kleio_template.format(
-                experiment=EXPERIMENT, dataset=dataset, model=model, version=args.version)
+                experiment=EXPERIMENT, dataset=dataset, model=model, version=args.version,
+                epsilon=data_whitening_epsilon)
             script = script_template.format(
                 file_path=file_path, data_whitening_epsilon=data_whitening_epsilon)
             commandline = commandline_template.format(kleio=kleio, script=script)
