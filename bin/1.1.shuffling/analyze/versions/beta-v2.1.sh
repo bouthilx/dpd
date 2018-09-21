@@ -5,6 +5,7 @@
 # Run on epochs 1,50,100,150,200,250,300
 # Fix KFAC computation on loss
 # Add l2 product norm
+# Use 1000 batches for PR metrics
 ###
 
 FILENAME="$(basename "$0")"
