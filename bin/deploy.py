@@ -75,7 +75,8 @@ CONFIG_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.path.p
 
 def build_database():
     if os.path.exists(CONTAINER_KLEIO_CONFIG):
-        return TrialBuilder().build_database({'config': CONTAINER_KLEIO_CONFIG})
+        with open(CONTAINER_KLEIO_CONFIG, 'r') as f:
+            return TrialBuilder().build_database({'config': f})
 
     # Rely on local config
     return TrialBuilder().build_database({})
