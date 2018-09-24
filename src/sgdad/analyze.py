@@ -81,7 +81,7 @@ def main(argv=None):
         print("\nLeaving without recomputing it...")
         sys.exit(0)
 
-    dataset, model, optimizer, device = build_experiment(**trial_args)
+    dataset, model, optimizer, device, seeds = build_experiment(**trial_args)
 
     # Fetch after build_experiment, because it does update content based on trial_args[updates]
     trial_config = trial_args['config']['content']
@@ -104,7 +104,7 @@ def main(argv=None):
     pprint.pprint(config['data'])
     print("\n\n")
 
-    seed(int(trial_args['sampler_seed']) + config['query']['epoch'])
+    seed(int(seeds['sampler']) + config['query']['epoch'])
 
     loaders = OrderedDict()
     pump_out_n_batches = config['data'].pop('pump_out', None)
@@ -148,15 +148,17 @@ def main(argv=None):
         analysis_config['name'] = name
         analyses[name] = build_analysis(**analysis_config)
 
+    training_loader = loaders[trial_config['data']['name']].get('train', None)
     statistics = OrderedDict()
     for name, dataset in loaders.items():
         results = OrderedDict()
-        for set_name, loader in dataset.items():
+        for set_name, analysis_loader in dataset.items():
             results[set_name] = OrderedDict()
             for analysis_name, analysis in analyses.items():
                 print("Computing {} on {}.{}".format(analysis_name, name, set_name))
-                results[set_name].update(
-                    analysis(results[set_name], name, set_name, loader, model, optimizer, device))
+                analysis_results = analysis(results[set_name], name, set_name, analysis_loader,
+                                            training_loader, model, optimizer, device)
+                results[set_name].update(analysis_results)
 
         statistics[name] = results
 

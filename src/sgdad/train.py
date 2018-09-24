@@ -48,6 +48,15 @@ def build_experiment(**kwargs):
 
     update(config, kwargs['updates'])
 
+    seeds = {'model': config.get('model_seed', kwargs.get('model_seed', None)),
+             'sampler': config.get('sampler_seed', kwargs.get('sampler_seed', None))}
+
+    if seeds['model'] is None:
+        raise ValueError("model_seed must be defined")
+
+    if seeds['sampler'] is None:
+        raise ValueError("sampler_seed must be defined")
+
     device = torch.device('cpu')
     if torch.cuda.is_available():
         print("\n\nUsing GPU\n\n")
@@ -59,7 +68,7 @@ def build_experiment(**kwargs):
     pprint.pprint(config)
     print("\n\n")
 
-    seed(int(kwargs['sampler_seed']))
+    seed(int(seeds['sampler']))
 
     dataset = build_dataset(**config['data'])
     input_size = dataset['input_size']
@@ -70,7 +79,7 @@ def build_experiment(**kwargs):
     print("\n\n")
 
     # Note: model is not loaded here for resumed trials
-    seed(int(kwargs['model_seed']))
+    seed(int(seeds['model']))
     model = build_model(input_size=input_size, num_classes=num_classes, **config['model'])
 
     print("\n\nModel\n")
@@ -83,14 +92,14 @@ def build_experiment(**kwargs):
     pprint.pprint(optimizer)
     print("\n\n")
 
-    return dataset, model, optimizer, device
+    return dataset, model, optimizer, device, seeds
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Script to train a model')
     parser.add_argument('--config', help='Path to yaml configuration file for the trial')
-    parser.add_argument('--model-seed', type=int, required=True, help='Seed for model\'s initialization')
-    parser.add_argument('--sampler-seed', type=int, required=True, help='Seed for data sampling order')
+    parser.add_argument('--model-seed', type=int, help='Seed for model\'s initialization')
+    parser.add_argument('--sampler-seed', type=int, help='Seed for data sampling order')
     parser.add_argument('--epochs', type=int, required=True, help='number of epochs to train.')
 
     parser.add_argument('--updates', nargs='+', default=[], metavar='updates',
@@ -98,7 +107,7 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
 
-    dataset, model, optimizer, device = build_experiment(**vars(args))
+    dataset, model, optimizer, device, seeds = build_experiment(**vars(args))
 
     train_loader = dataset['train']
     valid_loader = dataset['valid']
@@ -124,7 +133,7 @@ def main(argv=None):
 
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
-        seed(args.sampler_seed + engine.state.epoch)
+        seed(seeds['sampler'] + engine.state.epoch)
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def trainer_save_model(engine):
