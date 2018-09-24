@@ -314,9 +314,13 @@ def verify_configurations(configurations):
 def fetch_configurations(values):
     configurations = dict()
     for value in values:
+        value = value.strip("'")
         key = value.split("=")[0]
         value = "=".join(value.split("=")[1:])
-        configurations[key] = eval(value)
+        try:
+            configurations[key] = eval(value)
+        except SyntaxError as e:
+            raise SyntaxError("Cannot parse '{}'".format(value)) from e
 
     are_lists, length = verify_configurations(configurations)
 
