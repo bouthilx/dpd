@@ -420,7 +420,7 @@ def register_executions(args):
 
         assert_new_version(args, dataset, model)
 
-        tags = [args.version, args.experiment, dataset, model, 'execution'] + args.tags
+        tags = [args.version, args.experiment, dataset, model, args.type] + args.tags
 
         for configuration in fetch_configurations(args.values):
             configuration_file_path = create_configuration_file(base_file_path, configuration)
@@ -442,7 +442,7 @@ def register_analyses(args):
 
         assert_new_version(args, dataset, model)
 
-        tags = [args.version, args.experiment, dataset, model, 'analysis'] + args.tags
+        tags = [args.version, args.experiment, dataset, model, args.type] + args.tags
 
         for trial_id in fetch_completed_trial_ids(args, dataset, model):
             for configuration in fetch_configurations(args.values):
@@ -481,9 +481,11 @@ def fetch_completed_trial_ids(args, dataset, model):
 
 def submit(args):
 
+
     iterator = get_submissions_scripts(args.datasets, args.models, args.experiment, args.version)
     for dataset, model, script_path in iterator:
         tags = [args.version, args.type, args.experiment, dataset, model] + args.tags
+
         query = {
             'tags': {'$all': tags},
             'registry.status': {'$in': status.RESERVABLE}}
@@ -512,9 +514,7 @@ def submit(args):
         flow = FLOW_TEMPLATE.format(
             file_path=script_path, container=args.container, options=options,
             optionals=" --generate-only" if args.generate_only else "")
-        kleio = KLEIO_TEMPLATE.format(
-            experiment=args.experiment, dataset=dataset, model=model,
-            version=args.version)
+        kleio = SUBMIT_KLEIO_TEMPLATE.format(tags=";".join(tags))
 
         yield SUBMIT_COMMANDLINE_TEMPLATE.format(flow=flow, kleio=kleio)
 
