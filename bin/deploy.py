@@ -145,7 +145,7 @@ def add_common_arguments(parser):
 
     parser.add_argument('--tags', nargs="*", default=[], help='Additional tags for the trials')
 
-    parser.add_argument('--values', nargs="*", default=[],
+    parser.add_argument('--values', nargs="*", type=str, default=[],
                         help='Values to overwrite in configurations')
 
     # TODO remove print_only, and turn it into a test for kleio, if not using
@@ -320,6 +320,7 @@ def fetch_configurations(values):
         try:
             configurations[key] = eval(value)
         except SyntaxError as e:
+            print(values)
             raise SyntaxError("Cannot parse '{}'".format(value)) from e
 
     are_lists, length = verify_configurations(configurations)
