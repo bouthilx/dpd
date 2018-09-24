@@ -13,7 +13,7 @@ class ComputeEigenValues(object):
     def __init__(self, over):
         self.over = over
 
-    def __call__(self, results, name, set_name, loader, model, optimizer, device):
+    def __call__(self, results, name, set_name, analysis_loader, training_loader, model, optimizer, device):
         eigenvalues = OrderedDict()
         flat_results = flatten(results)
         for key, value in flatten(self.over).items():

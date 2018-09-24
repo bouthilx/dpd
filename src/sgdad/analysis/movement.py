@@ -48,20 +48,25 @@ class ComputeMovement(object):
             raise RuntimeError(
                 "Keys {} are missing in new parameters dict".format(remaining_keys))
 
-    def compute_movement(self, reference, batch_out_idx, model, device, loader):
+    def compute_movement(self, reference, batch_out_idx, model, device, analysis_loader):
         # TODO: The diff vectors are not exactly on the same data. Is it problematic?
         # They are not on the same data because each diff vector has a different batch_out_idx
         diffs = []
         n_samples = 0
 
         with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(loader):
+            for batch_idx, (data, target) in enumerate(analysis_loader):
 
-                if batch_idx == batch_out_idx:
-                    continue
+                # Commented out because infinit sampler will sample many mini-batches with similar
+                # examples, thus it won't be possible anymore to evaluate only on non-seen examples,
+                # unless we use another set.
+
+                # if batch_idx == batch_out_idx:
+                #     continue
 
                 data, target = data.to(device), target.to(device)
-                diffs.append((model(data) - reference[batch_idx]).view(-1))
+                softmax = F.softmax(self.model(data))
+                diffs.append((softmax - reference[batch_idx]).view(-1))
 
                 n_samples += diffs[-1].size(0)
                 if n_samples >= self.movement_samples:
@@ -72,7 +77,8 @@ class ComputeMovement(object):
         # return sqr_diff.mean(0)
         return torch.cat(diffs)[:self.movement_samples]
 
-    def __call__(self, results, name, set_name, loader, model, optimizer, device):
+    def __call__(self, results, name, set_name, analysis_loader, training_loader, model, optimizer,
+                 device):
 
         if "function" not in results or "_references" not in results['function']:
             raise RuntimeError("Cannot compute movement without computing reference analysis "
@@ -85,20 +91,19 @@ class ComputeMovement(object):
         reference_function = results['function'].pop('_references')
         reference_parameters = results['parameters'].pop('_references')
 
-        for batch_idx, (data, target) in enumerate(loader):
+        for batch_idx, (data, target) in enumerate(training_loader):
             data, target = data.to(device), target.to(device)
             optimizer.zero_grad()
             model.load_state_dict(original_state)
             output = model(data)
-            loss = F.nll_loss(output, target)
-            # loss = F.mse_loss(output, target)
+            loss = F.cross_entropy(output, target)
             loss.backward()
             optimizer.step()
             with torch.no_grad():
                 self.compute_parameter_diff(
                     parameters, OrderedDict(model.named_parameters()), reference_parameters)
                 movements.append(
-                    self.compute_movement(reference_function, batch_idx, model, device, loader))
+                    self.compute_movement(reference_function, batch_idx, model, device, analysis_loader))
 
         logger.info("Freing reference from GPU mem")
         del reference_function

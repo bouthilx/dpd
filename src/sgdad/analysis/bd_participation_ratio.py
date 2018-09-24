@@ -40,7 +40,7 @@ class ComputeBlockDiagonalParticipationRatio(object):
         n_samples = 0
 
         with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(self.loader):
+            for batch_idx, (data, target) in enumerate(self.analysis_loader):
 
                 # Commented out because infinit sampler will sample many mini-batches with similar
                 # examples, thus it won't be possible anymore to evaluate only on non-seen examples,
@@ -50,7 +50,8 @@ class ComputeBlockDiagonalParticipationRatio(object):
                 #     continue
 
                 data, target = data.to(self.device), target.to(self.device)
-                diffs.append(self.model(data) - self.reference_function[batch_idx])
+                softmax = F.softmax(self.model(data))
+                diffs.append(softmax - self.reference_function[batch_idx])
 
                 n_samples += data.size(0)
                 if n_samples >= self.movement_samples:
@@ -70,9 +71,9 @@ class ComputeBlockDiagonalParticipationRatio(object):
         references = []
         n_samples = 0
 
-        for batch_idx, (data, target) in enumerate(self.loader):
+        for batch_idx, (data, target) in enumerate(self.analysis_loader):
             data = data.to(self.device)
-            references.append(self.model(data))
+            references.append(F.softmax(self.model(data)))
             n_samples += data.size(0)
             if n_samples >= self.movement_samples:
                 break
@@ -101,12 +102,12 @@ class ComputeBlockDiagonalParticipationRatio(object):
     def main_loop(self):
         original_state = copy.deepcopy(self.model.state_dict())
 
-        self.number_of_batches = len(self.loader)
+        self.number_of_batches = len(self.training_loader)
         print("Analysing participation ratio on {} batches".format(self.number_of_batches))
         self.initialize_covs()
         self.compute_references()
 
-        for batch_idx, mini_batch in enumerate(self.loader):
+        for batch_idx, mini_batch in enumerate(self.training_loader):
             self.model.load_state_dict(original_state)
             self.make_one_step(mini_batch)
             with torch.no_grad():
@@ -145,8 +146,7 @@ class ComputeBlockDiagonalParticipationRatio(object):
         data, target = data.to(self.device), target.to(self.device)
         self.optimizer.zero_grad()
         output = self.model(data)
-        loss = F.nll_loss(output, target)
-        # loss = F.mse_loss(output, target)
+        loss = F.cross_entropy(output, target)
         loss.backward()
         self.optimizer.step()
 
@@ -155,9 +155,10 @@ class ComputeBlockDiagonalParticipationRatio(object):
         self.update_parameter_covs()
         self.update_function_cov(batch_idx)
 
-    def __call__(self, results, name, set_name, loader, model, optimizer, device):
+    def __call__(self, results, name, set_name, analysis_loader, training_loader, model, optimizer, device):
         self.model = model
-        self.loader = loader
+        self.training_loader = training_loader
+        self.analysis_loader = analysis_loader
         self.optimizer = optimizer
         self.device = device
 

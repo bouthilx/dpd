@@ -145,16 +145,17 @@ class ComputeFisherRaoNorm(object):
     def __init__(self):
         pass
 
-    def __call__(self, results, name, set_name, loader, model, optimizer, device):
+    def __call__(self, results, name, set_name, analysis_loader, training_loader, model, optimizer,
+                 device):
 
-        batch_size = loader[0][0].size(0)
-        nsamples = len(loader) * batch_size
+        batch_size = analysis_loader[0][0].size(0)
+        nsamples = len(analysis_loader) * batch_size
 
         metric = FisherRaoNormKFAC(model)
 
         criterion = torch.nn.CrossEntropyLoss()
 
-        for batch_idx, (data, target) in enumerate(loader):
+        for batch_idx, (data, target) in enumerate(analysis_loader):
             data, target = data.to(device), target.to(device)
             output = model.forward(data)
             loss = criterion(output, target)

@@ -24,20 +24,21 @@ class ComputeSpectralNorm(object):
         self.n_power_iterations = n_power_iterations
         self.eps = eps
 
-    def __call__(self, results, name, set_name, loader, model, optimizer, device):
+    def __call__(self, results, name, set_name, analysis_loader, training_loader, model, optimizer,
+                 device):
 
         # Dt() define below eq (3.4)
 
         with torch.no_grad():
 
-            spectral_norm = self.compute_model_spectral_norm(loader, model, device)
+            spectral_norm = self.compute_model_spectral_norm(analysis_loader, model, device)
 
         return {'spectral_norm': spectral_norm.item()}
 
 
-    def compute_model_spectral_norm(self, loader, model, device):
+    def compute_model_spectral_norm(self, analysis_loader, model, device):
 
-        expectation = self.compute_expectation(loader, model, device)
+        expectation = self.compute_expectation(analysis_loader, model, device)
 
         layers_spectral_norm = 1.0
 
@@ -47,10 +48,10 @@ class ComputeSpectralNorm(object):
 
         return torch.sqrt(expectation) * layers_spectral_norm
 
-    def compute_expectation(self, loader, model, device):
+    def compute_expectation(self, analysis_loader, model, device):
         expectation = 0.0
         n_samples = 0
-        for batch_idx, (data, target) in enumerate(loader):
+        for batch_idx, (data, target) in enumerate(analysis_loader):
             data, target = data.to(device), target.to(device)
             output = model(data)
             flattened_data = data.view(data.size(0), -1)

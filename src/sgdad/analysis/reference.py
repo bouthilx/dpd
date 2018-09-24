@@ -2,7 +2,9 @@ from collections import OrderedDict
 import copy
 
 import numpy
+
 import torch
+import torch.nn.functional as F
 
 
 MODEL_SIZE_THRESHOLD = 100000
@@ -12,10 +14,10 @@ def build():
     return compute_reference
 
 
-def compute_reference(results, name, set_name, loader, model, optimizer, device):
+def compute_reference(results, name, set_name, analysis_loader, training_loader, model, optimizer, device):
 
     with torch.no_grad():
-        return _compute_reference(results, name, set_name, loader, model, optimizer, device)
+        return _compute_reference(results, name, set_name, analysis_loader, model, optimizer, device)
 
 
 def _compute_reference(results, name, set_name, loader, model, optimizer, device):
@@ -48,7 +50,7 @@ def _compute_reference_function(loader, model, device):
     references = []
     for batch_idx, (data, target) in enumerate(loader):
         data = data.to(device)
-        references.append(model(data))
+        references.append(F.softmax(model(data)))
 
     if references[0].size(0) != references[-1].size(0):
         references.pop(-1)

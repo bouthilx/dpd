@@ -29,10 +29,10 @@ class ComputeFisherRaoNorm(object):
     def __init__(self):
         pass
 
-    def __call__(self, results, name, set_name, loader, model, optimizer, device):
+    def __call__(self, results, name, set_name, analysis_loader, training_loader, model, optimizer, device):
 
         with torch.no_grad():
-            fisher_rao_norms = self.compute_fisher_rao_norm(loader, model, device)
+            fisher_rao_norms = self.compute_fisher_rao_norm(analysis_loader, model, device)
 
         return fisher_rao_norms
 
