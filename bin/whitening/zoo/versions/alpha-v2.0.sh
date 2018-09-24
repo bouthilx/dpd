@@ -6,7 +6,7 @@
 
 FILENAME="$(basename "$0")"
 EXECUTION_VERSION="${FILENAME%.*}"
-CONTAINER="62351cf"
+CONTAINER="bouthilx/sgd-space-hub:350a24c"
 
 
 ./bin/register.sh ${CONTAINER} experiments \

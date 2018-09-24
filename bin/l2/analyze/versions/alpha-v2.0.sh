@@ -12,7 +12,7 @@
 FILENAME="$(basename "$0")"
 ANALYSIS_VERSION="a-${FILENAME%.*}"
 EXECUTION_VERSION="alpha-v2.0"
-CONTAINER="bouthilx/sgd-space-hub:495d511"
+CONTAINER="bouthilx/sgd-space-hub:350a24c"
 
 
 VALUES="'epochs=list(range(6))+[10, 15, 20, 25, 50, 75, 100, 150, 200, 250, 300]'"
