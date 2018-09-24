@@ -25,7 +25,8 @@ KLEIO_TEMPLATE = """\
 kleio save --branch-original --config /config/kleio.core/kleio_config.yaml \
 --tags {tags}"""
 
-EXECUTION_SCRIPT_TEMPLATE = "python3.6 /repos/sgd-space/src/sgdad/train.py --config={file_path}"
+EXECUTION_SCRIPT_TEMPLATE = (
+    "python3.6 /repos/sgd-space/src/sgdad/train.py --config={file_path} --epochs 300")
 
 REGISTER_COMMANDLINE_TEMPLATE = "{kleio} {script}"
 
