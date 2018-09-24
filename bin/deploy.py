@@ -145,8 +145,11 @@ def add_common_arguments(parser):
 
     parser.add_argument('--tags', nargs="*", default=[], help='Additional tags for the trials')
 
-    parser.add_argument('--values', type=str, default="",
-                        help='Values to overwrite in configurations')
+    parser.add_argument(
+        '--values', nargs="*", type=str, default=[],
+        help=('Values to overwrite in configurations. Warning! Because of singularity we must '
+              'pass arguments as a list to support arguments with spaces even if quoted. The '
+              'different values should be separated by \'|\' chars.'))
 
     # TODO remove print_only, and turn it into a test for kleio, if not using
     # kleio to register this execution, then print-only
@@ -313,7 +316,8 @@ def verify_configurations(configurations):
 
 def fetch_configurations(values):
     configurations = dict()
-    for value in values.split(";"):
+    for value in " ".join(values).split("|"):
+        value = value.strip(" ")
         key = value.split("=")[0]
         value = "=".join(value.split("=")[1:])
         try:
