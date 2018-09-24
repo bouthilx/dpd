@@ -1,5 +1,0 @@
-algorithms:
-    BayesianOptimizer
-
-pool_size: 2
-max_trials: 100
