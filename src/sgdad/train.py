@@ -43,10 +43,11 @@ def build_experiment(**kwargs):
     if 'update' in kwargs:
         kwargs['updates'] = kwargs['update']
 
-    if isinstance(kwargs['updates'] , str):
-        kwargs['updates'] = [kwargs['updates']]
+    if 'updates' in kwargs:
+        if isinstance(kwargs['updates'] , str):
+            kwargs['updates'] = [kwargs['updates']]
 
-    update(config, kwargs['updates'])
+        update(config, kwargs['updates'])
 
     seeds = {'model': config.get('model_seed', kwargs.get('model_seed', None)),
              'sampler': config.get('sampler_seed', kwargs.get('sampler_seed', None))}
