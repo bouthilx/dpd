@@ -74,7 +74,7 @@ assert_env('SGD_SPACE_HASH_DIR')
 
 SUBMISSION_ROOT = os.environ['SGD_SPACE_SUBMISSION_DIR']
 HASH_DIR = os.environ['SGD_SPACE_HASH_DIR']
-CONFIG_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.path.pardir, 'configs')
+CONFIG_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  'configs')
 
 
 def build_database():
@@ -360,6 +360,8 @@ Hash content lead to hash code {hash_code}.
 
 
 def convert_path_to_hash_dir(file_path):
+
+    file_path = os.path.abspath(file_path)
 
     if file_path.startswith(CONFIG_ROOT):
         return file_path.replace(CONFIG_ROOT, os.path.join(HASH_DIR, 'configs'))
