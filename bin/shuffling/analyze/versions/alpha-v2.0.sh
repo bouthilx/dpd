@@ -12,10 +12,11 @@
 FILENAME="$(basename "$0")"
 ANALYSIS_VERSION="a-${FILENAME%.*}"
 EXECUTION_VERSION="alpha-v2.0"
-CONTAINER="bouthilx/sgd-space-hub:350a24c"
+CONTAINER="bouthilx/sgd-space-hub:58a31a0"
 
 
-VALUES="'epochs=list(range(6))+[10, 15, 20, 25, 50, 75, 100, 150, 200, 250, 300]'"
+VALUES="query.epoch=300"
+# VALUES="query.epoch=list(range(6))+[10, 15, 20, 25, 50, 75, 100, 150, 200, 250, 300]"
 
 
 # Simplified Fisher-Rao norm
@@ -41,16 +42,16 @@ ANALYSIS_CONF=configs/shuffling/analyzes/kfac_fisher_rao_norm.yaml
     --values "$VALUES"
 
 
-# Participation ratio
-ANALYSIS_CONF=configs/shuffling/analyzes/participation_ratio.yaml
-./bin/register.sh $CONTAINER analyses \
-    --experiment shuffling \
-    --config ${ANALYSIS_CONF} \
-    --execution-version ${EXECUTION_VERSION} \
-    --version "${ANALYSIS_VERSION}" \
-    --tags "pr" \
-    --models mlp1 mlp2 mlp1wb mlp2wb \
-    --values "$VALUES"
+# # Participation ratio
+# ANALYSIS_CONF=configs/shuffling/analyzes/participation_ratio.yaml
+# ./bin/register.sh $CONTAINER analyses \
+#     --experiment shuffling \
+#     --config ${ANALYSIS_CONF} \
+#     --execution-version ${EXECUTION_VERSION} \
+#     --version "${ANALYSIS_VERSION}" \
+#     --tags "pr" \
+#     --models mlp1 mlp2 mlp1wb mlp2wb \
+#     --values "$VALUES"
 
 
 # Block Diagonal Participation ratio
