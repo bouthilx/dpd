@@ -9,6 +9,8 @@ from kleio.core.utils import flatten, unflatten
 
 import torch
 
+from tqdm import tqdm
+
 from sgdad.train import build_experiment, update, seed
 from sgdad.dataset.base import build_dataset, build_wrapper
 from sgdad.dataset.wrapper import infinite
@@ -108,12 +110,14 @@ def main(argv=None):
 
     loaders = OrderedDict()
     pump_out_n_batches = config['data'].pop('pump_out', None)
-    for name, data_config in config['data'].items():
+    training_loader = pump_out(dataset['train'], pump_out_n_batches, _desc='train')
+    for name, data_config in tqdm(config['data'].items()):
         print("Preparing {}".format(name))
         if name == "model":
+            print("({})".format(trial_config['data']['name']))
             model_data = OrderedDict()
             for set_name in data_config['select']:
-                model_data[set_name] = pump_out(dataset[set_name], pump_out_n_batches)
+                model_data[set_name] = pump_out(dataset[set_name], None, _desc=set_name)
             loaders[trial_config['data']['name']] = model_data
             continue
 
@@ -124,7 +128,7 @@ def main(argv=None):
         analyze_data = OrderedDict()
         for set_name in select:
             # Iterate now to keep same order throughout analyses
-            analyze_data[set_name] = pump_out(analyze_dataset[set_name], pump_out_n_batches)
+            analyze_data[set_name] = pump_out(analyze_dataset[set_name], None, _desc=set_name)
         loaders[name] = analyze_data
 
     # print("Limiting all datasets to the size of the smallest one, "
@@ -148,7 +152,6 @@ def main(argv=None):
         analysis_config['name'] = name
         analyses[name] = build_analysis(**analysis_config)
 
-    training_loader = loaders[trial_config['data']['name']].get('train', None)
     statistics = OrderedDict()
     for name, dataset in loaders.items():
         results = OrderedDict()
@@ -188,14 +191,17 @@ def curate_key(key):
     return ".".join([name for name in key.split(".") if not is_hidden(name)])
 
 
-def pump_out(loader, number_of_batches):
+def pump_out(loader, number_of_batches, _desc=None):
     if number_of_batches is None:
         # TODO: Make this generic to adapt to any datasets
-        return [batch for batch in loader][:78]  # Smaller sets in MNIST and CIFAR10
+        return [batch for batch in tqdm(loader, desc=_desc)][:78]  # Smaller sets in MNIST and CIFAR10
 
     batches = []
-    for i, batch in enumerate(infinite.extend(loader)):
+    iterator =  tqdm(enumerate(infinite.extend(loader)), total=number_of_batches, leave=True,
+                     desc=_desc)
+    for i, batch in iterator:
         if i >= number_of_batches:
+            iterator.close()
             break
         batches.append(batch)
 

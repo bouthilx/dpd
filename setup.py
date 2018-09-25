@@ -21,7 +21,7 @@ setup(
     packages=find_namespace_packages('src'),
     install_requires=[],
     extras_require = {
-        'execute':  ['torch', 'torchvision', 'torchnet', 'pytorch-ignite', 'orion.core'],
+        'execute':  ['torch', 'torchvision', 'torchnet', 'pytorch-ignite', 'orion.core', 'tqdm'],
         'deploy': ['kleio.core']
     },
     setup_requires=['setuptools', 'pytest-runner'],
