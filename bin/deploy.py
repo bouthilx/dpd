@@ -60,6 +60,9 @@ CONTAINER_KLEIO_CONFIG = '/config/kleio.core/kleio_config.yaml'
 
 SUBMISSION_FILE_TEMPLATE = "{model}.{version}.sh"
 
+EXPERIMENT_JOB_TYPE = 'experiments'
+ANALYSIS_JOB_TYPE = 'analyses'
+
 
 def assert_env(name):
     if name not in os.environ:
@@ -118,7 +121,7 @@ def build_scheduling_parser(subparsers):
 
 def add_common_arguments(parser):
     parser.add_argument(
-        'type', choices=['experiments', 'analyses'],
+        'type', choices=[EXPERIMENT_JOB_TYPE, ANALYSIS_JOB_TYPE],
         help='Type of the execution.')
 
     parser.add_argument(
@@ -471,7 +474,7 @@ def create_param_tags(configuration):
 
 
 def fetch_completed_trial_ids(args, dataset, model):
-    tags = [args.execution_version, args.experiment, dataset, model, 'execution']
+    tags = [args.execution_version, args.experiment, dataset, model, EXPERIMENT_JOB_TYPE]
     query = {
         'tags': {'$all': tags},
         'registry.status': {'$eq': 'completed'}}
