@@ -15,13 +15,14 @@ from sgdad.utils.cov import ApproximateMeter, CovarianceMeter
 logger = logging.getLogger(__name__)
 
 
-def build(movement_samples, optimizer_params):
-    return ComputeBlockDiagonalParticipationRatio(movement_samples, optimizer_params)
+def build(movement_samples, centered, optimizer_params):
+    return ComputeBlockDiagonalParticipationRatio(movement_samples, centered, optimizer_params)
 
 
 class ComputeBlockDiagonalParticipationRatio(object):
-    def __init__(self, movement_samples, optimizer_params):
+    def __init__(self, movement_samples, centered, optimizer_params):
         self.movement_samples = movement_samples
+        self.centered = centered
         self.optimizer_params = optimizer_params
 
     def update_parameter_covs(self):
@@ -96,11 +97,11 @@ class ComputeBlockDiagonalParticipationRatio(object):
         for key, value in self.model.named_parameters():
             size = numpy.prod(value.size())
             cov_meter = ApproximateMeter(
-                CovarianceMeter(),
+                CovarianceMeter(centered=self.centered),
                 n_dimensions=min(size, self.number_of_batches))
             self.parameter_Cs[key] = cov_meter
         # self.function_C = ApproximateMeter(CovarianceMeter(), n_dimensions=500)
-        self.function_C = CovarianceMeter()
+        self.function_C = CovarianceMeter(centered=self.centered)
 
     def main_loop(self):
         original_state = copy.deepcopy(self.model.state_dict())
