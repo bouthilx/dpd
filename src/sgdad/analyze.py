@@ -110,7 +110,8 @@ def main(argv=None):
 
     loaders = OrderedDict()
     pump_out_n_batches = config['data'].pop('pump_out', None)
-    training_loader = pump_out(dataset['train'], pump_out_n_batches, _desc='train')
+    batch_size = config['data'].pop('batch_size', None)
+    training_loader = pump_out(dataset['train'], pump_out_n_batches, batch_size, _desc='train')
     for name, data_config in tqdm(config['data'].items()):
         print("Preparing {}".format(name))
         if name == "model":
@@ -191,10 +192,28 @@ def curate_key(key):
     return ".".join([name for name in key.split(".") if not is_hidden(name)])
 
 
-def pump_out(loader, number_of_batches, _desc=None):
+def change_batch_size(loader, batch_size):
+    if batch_size is None:
+        return loader
+
+    if loader.batch_sampler.batch_size == batch_size:
+        return loader
+
+    loader.batch_sampler = torch.utils.data.sampler.BatchSampler(
+        loader.sampler, batch_size, loader.batch_sampler.drop_last)
+
+    return loader
+
+
+def pump_out(loader, number_of_batches, batch_size=None, _desc=None):
+
+    loader = change_batch_size(loader, batch_size)
+    batch_size = loader.batch_sampler.batch_size
+
     if number_of_batches is None:
         # TODO: Make this generic to adapt to any datasets
-        return [batch for batch in tqdm(loader, desc=_desc)][:78]  # Smaller sets in MNIST and CIFAR10
+        N = 10000 / batch_size  # Smallest sets in MNIST and CIFAR10
+        return [batch for batch in tqdm(loader, desc=_desc)][:int(N)]
 
     batches = []
     iterator =  tqdm(enumerate(infinite.extend(loader)), total=number_of_batches, leave=True,

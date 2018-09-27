@@ -7,19 +7,22 @@ import numpy
 import torch
 import torch.nn.functional as F
 
+from tqdm import tqdm
+
 from sgdad.utils.cov import ApproximateMeter, CovarianceMeter
 
 
 logger = logging.getLogger(__name__)
 
 
-def build(movement_samples):
-    return ComputeBlockDiagonalParticipationRatio(movement_samples)
+def build(movement_samples, optimizer_params):
+    return ComputeBlockDiagonalParticipationRatio(movement_samples, optimizer_params)
 
 
 class ComputeBlockDiagonalParticipationRatio(object):
-    def __init__(self, movement_samples):
+    def __init__(self, movement_samples, optimizer_params):
         self.movement_samples = movement_samples
+        self.optimizer_params = optimizer_params
 
     def update_parameter_covs(self):
         keys = set()
@@ -107,7 +110,7 @@ class ComputeBlockDiagonalParticipationRatio(object):
         self.initialize_covs()
         self.compute_references()
 
-        for batch_idx, mini_batch in enumerate(self.training_loader):
+        for batch_idx, mini_batch in enumerate(tqdm(self.training_loader, desc='computing points')):
             self.model.load_state_dict(original_state)
             self.make_one_step(mini_batch)
             with torch.no_grad():
@@ -155,6 +158,28 @@ class ComputeBlockDiagonalParticipationRatio(object):
         self.update_parameter_covs()
         self.update_function_cov(batch_idx)
 
+    def set_optimizer_params(self):
+
+        if getattr(self, 'original_params', None) is not None:
+            raise RuntimeError("Cannot set optimizer params if not previously restored"
+                               "using self.restore_optimizer_params()")
+
+        self.original_params = self.optimizer.param_groups
+
+        # Don't want to deep copy the params, hyper-parameters will be overwritten anyway.
+        new_params = copy.copy(self.original_params)
+        for group in new_params:
+            group.update(self.optimizer_params)
+        self.optimizer.param_groups = new_params
+
+    def restore_optimizer_params(self):
+        if getattr(self, 'original_params', None) is None:
+            raise RuntimeError("Cannot restore optimizer params if not previously set"
+                               "using self.set_optimizer_params()")
+
+        self.optimizer.param_groups = self.original_params
+        self.original_params = None
+
     def __call__(self, results, name, set_name, analysis_loader, training_loader, model, optimizer, device):
         self.model = model
         self.training_loader = training_loader
@@ -162,7 +187,11 @@ class ComputeBlockDiagonalParticipationRatio(object):
         self.optimizer = optimizer
         self.device = device
 
+        self.set_optimizer_params()
+
         function_pr, parameter_pr = self.main_loop()
+
+        self.restore_optimizer_params()
 
         return {'parameters': {'participation_ratio': {'block_diagonal': parameter_pr.item()}},
                 'function': {'participation_ratio': {'full': function_pr.item()}}}
