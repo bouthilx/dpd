@@ -42,9 +42,9 @@ class ComputeSpectralNorm(object):
 
         layers_spectral_norm = 1.0
 
-        for module in model.named_modules():
+        for module in model.modules():
             if module.__class__.__name__ == 'Linear' or module.__class__.__name__ == 'Conv2d':
-                layers_spectral_norm *= compute_module_spectral_norm(module._parameters['weight'])
+                layers_spectral_norm *= self.compute_module_spectral_norm(module._parameters['weight'])
 
         return torch.sqrt(expectation) * layers_spectral_norm
 
@@ -63,7 +63,7 @@ class ComputeSpectralNorm(object):
 
     def compute_module_spectral_norm(self, weight_layer):
         n_power_iterations = self.n_power_iterations
-        _eps = self.n_power_iterations
+        _eps = self.eps
         _dim = 0
         weight_height = weight_layer.size(_dim)
         u = normalize(weight_layer.new_empty(weight_height).normal_(0, 1), dim=0, eps=_eps)
