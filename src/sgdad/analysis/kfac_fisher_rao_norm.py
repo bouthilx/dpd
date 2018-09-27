@@ -140,6 +140,28 @@ class FisherRaoNormKFAC(Optimizer):
                     g_filter[k + kh * j + kw * kh * i, 0, j, k] = 1
         return g_filter
 
+    def get_pr(self):
+        """Returns the PR of the eig. of F for the whole network."""
+        sum_eig = 0
+        sum_eig2 = 0
+        for group in self.param_groups:
+            weight = group['params'][0]
+            state = self.state[weight]
+            s, s2 = self._get_eigenvalues_one_module(state)
+            sum_eig += s
+            sum_eig2 += s2
+        return (sum_eig ** 2) / sum_eig2
+
+    def _get_eigenvalues_one_module(self, state):
+        """Returns the sum and sum of squared eig. of F. of a module."""
+        ex = torch.symeig(state['xxt'])[0]
+        eg = torch.symeig(state['ggt'])[0]
+        eigenvalues = torch.ger(ex, eg).view(-1)
+        eigenvalues *= state['num_locations']  #TODO check
+        s = eigenvalues.sum()
+        s2 = (eigenvalues ** 2).sum()
+        return s, s2
+
 
 class ComputeFisherRaoNorm(object):
     def __init__(self):
@@ -164,4 +186,5 @@ class ComputeFisherRaoNorm(object):
             with torch.no_grad():
                 metric.update_stats(nsamples // batch_size)
 
-        return OrderedDict((('kfac_fisher_rao_norm.empirical', metric.get_norm().item()), ))
+        return {'kfac_fisher_rao_norm.empirical': metric.get_norm().item(),
+                'pr_fisher.empirical': metric.get_pr().item()}
