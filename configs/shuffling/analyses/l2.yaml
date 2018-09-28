@@ -3,6 +3,8 @@ data:
         select:
             - train
 
+seed: 1
+
 query:
     epoch: 'overwrite-me'
 

@@ -12,18 +12,11 @@ import torch
 from tqdm import tqdm
 
 from sgdad.train import build_experiment, update, seed
-from sgdad.dataset.base import build_dataset, build_wrapper
+from sgdad.dataset.base import build_wrapper
 from sgdad.dataset.wrapper import infinite
-from sgdad.model.base import build_model, load_model, save_model
-from sgdad.optimizer.base import build_optimizer
+from sgdad.model.base import load_checkpoint
 from sgdad.analysis.base import build_analysis
 from sgdad.utils.yaml import ordered_load
-
-
-##
-## Multiple datasets? Like original + spherical cow
-## Multiple analysis?
-##
 
 
 def analysis_already_exists(trial, query):
@@ -94,7 +87,7 @@ def main(argv=None):
 
     model.to(device)
 
-    metadata = load_model(model, 'model', config['query'], trial_logger)
+    metadata = load_checkpoint(model, optimizer, 'checkpoint', config['query'], trial_logger)
     assert metadata is not None
     runtime_timestamp = metadata['runtime_timestamp']
 
@@ -106,7 +99,7 @@ def main(argv=None):
     pprint.pprint(config['data'])
     print("\n\n")
 
-    seed(int(seeds['sampler']) + config['query']['epoch'])
+    seed(config['seed'])
 
     loaders = OrderedDict()
     pump_out_n_batches = config['data'].pop('pump_out', None)

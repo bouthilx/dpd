@@ -1,5 +1,3 @@
-from collections import OrderedDict
-
 import torch
 import torch.nn.functional as F
 
@@ -178,7 +176,7 @@ class FisherRaoNormKFAC(Optimizer):
         ex = torch.symeig(state['xxt'])[0]
         eg = torch.symeig(state['ggt'])[0]
         eigenvalues = torch.ger(ex, eg).view(-1)
-        eigenvalues *= state['num_locations']  #TODO check
+        eigenvalues *= state['num_locations']  # TODO check
         s = eigenvalues.sum()
         s2 = (eigenvalues ** 2).sum()
         return s, s2

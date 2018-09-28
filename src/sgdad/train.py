@@ -19,7 +19,7 @@ import torch.nn.functional as F
 
 import yaml
 from sgdad.dataset.base import build_dataset
-from sgdad.model.base import build_model, load_model, save_model
+from sgdad.model.base import build_model, load_checkpoint, save_checkpoint
 from sgdad.optimizer.base import build_optimizer
 
 
@@ -44,7 +44,7 @@ def build_experiment(**kwargs):
         kwargs['updates'] = kwargs['update']
 
     if 'updates' in kwargs:
-        if isinstance(kwargs['updates'] , str):
+        if isinstance(kwargs['updates'], str):
             kwargs['updates'] = [kwargs['updates']]
 
         update(config, kwargs['updates'])
@@ -101,7 +101,7 @@ def main(argv=None):
     parser.add_argument('--config', help='Path to yaml configuration file for the trial')
     parser.add_argument('--model-seed', type=int, help='Seed for model\'s initialization')
     parser.add_argument('--sampler-seed', type=int, help='Seed for data sampling order')
-    parser.add_argument('--epochs', type=int, required=True, help='number of epochs to train.')
+    # parser.add_argument('--epochs', type=int, required=True, help='number of epochs to train.')
 
     parser.add_argument('--updates', nargs='+', default=[], metavar='updates',
                         help='Values to update in the configuration file')
@@ -122,22 +122,23 @@ def main(argv=None):
         device=device)
 
     @trainer.on(Events.STARTED)
-    def trainer_load_model(engine):
-        metadata = load_model(model, 'model')
+    def trainer_load_checkpoint(engine):
+        metadata = load_checkpoint(model, optimizer, 'checkpoint')
         if metadata:
             engine.state.epoch = metadata['epoch']
+            engine.state.iteration = metadata['iteration']
         else:
             engine.state.epoch = 0
             engine.state.iteration = 0
             engine.state.output = 0.0
-            trainer_save_model(engine)
+            trainer_save_checkpoint(engine)
 
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
         seed(seeds['sampler'] + engine.state.epoch)
 
     @trainer.on(Events.EPOCH_COMPLETED)
-    def trainer_save_model(engine):
+    def trainer_save_checkpoint(engine):
         train_metrics = evaluator.run(train_loader).metrics
         valid_metrics = evaluator.run(valid_loader).metrics
         test_metrics = evaluator.run(test_loader).metrics
@@ -158,19 +159,22 @@ def main(argv=None):
             ),
         })
 
-        print("Epoch {:>4} Iteration {:>8} Loss {:>12}".format(engine.state.epoch, engine.state.iteration, engine.state.output))
-        if engine.state.epoch in EPOCS_TO_SAVE: 
-            save_model(model, 'model', epoch=engine.state.epoch)
+        print("Epoch {:>4} Iteration {:>8} Loss {:>12}".format(
+            engine.state.epoch, engine.state.iteration, engine.state.output))
+        if engine.state.epoch in EPOCS_TO_SAVE:
+            save_checkpoint(model, optimizer, 'checkpoint',
+                            epoch=engine.state.epoch,
+                            iteration=engine.state.iteration)
 
     print("Training")
-    trainer.run(train_loader, max_epochs=args.epochs)
+    trainer.run(train_loader, max_epochs=300)
 
     evaluator.run(valid_loader)
     accuracy = evaluator.state.metrics['accuracy']
     report_results([dict(
         name="valid_error_rate",
         type="objective",
-        value= 1.0 - accuracy)])
+        value=1.0 - accuracy)])
 
 
 def seed(seed):

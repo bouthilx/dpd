@@ -19,6 +19,8 @@ data:
         target: target
         level: 1.0
 
+seed: 1
+
 query:
     epoch: 'overwrite-me'
 

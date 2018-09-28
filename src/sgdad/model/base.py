@@ -12,16 +12,16 @@ factories = fetch_factories('sgdad.model', __file__)
 
 def build_model(name=None, **kwargs):
     return factories[name](**kwargs)
-    
 
-def save_model(model, filename, **metadata):
+
+def save_checkpoint(model, optimizer, filename, **metadata):
     file_like_object = io.BytesIO()
-    torch.save(model.state_dict(), file_like_object)
+    torch.save(dict(model=model.state_dict(), optimizer=optimizer.state_dict()), file_like_object)
     file_like_object.seek(0)
     kleio_logger.log_artifact(filename, file_like_object, **metadata)
 
 
-def load_model(model, filename, query={}, logger=None):
+def load_checkpoint(model, optimizer, filename, query={}, logger=None):
     if logger is None:
         print("No logger to load artifacts")
         logger = kleio_logger
@@ -37,5 +37,6 @@ def load_model(model, filename, query={}, logger=None):
 
     file_like_object, metadata = artifact
     state_dict = torch.load(file_like_object.download())
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict['model'])
+    optimizer.load_state_dict(state_dict['optimizer'])
     return metadata

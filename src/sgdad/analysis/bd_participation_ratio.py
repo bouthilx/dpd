@@ -42,6 +42,7 @@ class ComputeBlockDiagonalParticipationRatio(object):
         # They are not on the same data because each diff vector has a different batch_out_idx
         diffs = []
         n_samples = 0
+        self.model.eval()
 
         with torch.no_grad():
             for batch_idx, (data, target) in enumerate(self.analysis_loader):
@@ -74,6 +75,7 @@ class ComputeBlockDiagonalParticipationRatio(object):
     def compute_reference_function(self):
         references = []
         n_samples = 0
+        self.model.eval()
 
         for batch_idx, (data, target) in enumerate(self.analysis_loader):
             data = data.to(self.device)
@@ -103,8 +105,21 @@ class ComputeBlockDiagonalParticipationRatio(object):
         # self.function_C = ApproximateMeter(CovarianceMeter(), n_dimensions=500)
         self.function_C = CovarianceMeter(centered=self.centered)
 
+    def make_original_checkpoint(self):
+        self.original_model_state = copy.deepcopy(self.model.state_dict())
+        self.original_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
+
+    def restore_checkpoint(self):
+        self.model.load_state_dict(self.original_model_state)
+        self.optimizer.load_state_dict(self.original_optimizer_state)
+
+    def destroy_checkpoint(self):
+        self.original_model_state = None
+        self.original_optimizer_state = None
+
     def main_loop(self):
-        original_state = copy.deepcopy(self.model.state_dict())
+
+        self.make_original_checkpoint()
 
         self.number_of_batches = len(self.training_loader)
         print("Analysing participation ratio on {} batches".format(self.number_of_batches))
@@ -112,19 +127,22 @@ class ComputeBlockDiagonalParticipationRatio(object):
         self.compute_references()
 
         for batch_idx, mini_batch in enumerate(tqdm(self.training_loader, desc='computing points')):
-            self.model.load_state_dict(original_state)
+            self.restore_checkpoint()
             self.make_one_step(mini_batch)
             with torch.no_grad():
                 self.update_covs(batch_idx)
 
+        self.restore_checkpoint()
+        self.destroy_checkpoint()
+
+        logger.info("Freing GPU mem")
+        torch.cuda.empty_cache()
+
         function_pr = self.compute_function_pr()
         parameter_pr = self.compute_parameter_pr()
 
-        self.model.load_state_dict(original_state)
-
         delattr(self, 'parameter_Cs')
         delattr(self, 'function_C')
-        del original_state
 
         logger.info("Freing GPU mem")
         torch.cuda.empty_cache()
@@ -146,6 +164,7 @@ class ComputeBlockDiagonalParticipationRatio(object):
         return (root_enumerator ** 2) / denominator
 
     def make_one_step(self, mini_batch):
+        self.model.train()
         data, target = mini_batch
         data, target = data.to(self.device), target.to(self.device)
         self.optimizer.zero_grad()
@@ -181,7 +200,8 @@ class ComputeBlockDiagonalParticipationRatio(object):
         self.optimizer.param_groups = self.original_params
         self.original_params = None
 
-    def __call__(self, results, name, set_name, analysis_loader, training_loader, model, optimizer, device):
+    def __call__(self, results, name, set_name, analysis_loader, training_loader, model, optimizer,
+                 device):
         self.model = model
         self.training_loader = training_loader
         self.analysis_loader = analysis_loader
