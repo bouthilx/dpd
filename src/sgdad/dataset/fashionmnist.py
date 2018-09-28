@@ -1,26 +1,40 @@
+from collections import OrderedDict
+
 import torch
 from torchvision import datasets, transforms
 
-def build(train_batch_size=128, test_batch_size=500, num_workers=2):
+
+DATA_SIZE = 50000
+
+
+def build(batch_size, data_path, num_workers):
+
+    dataset = datasets.FashionMNIST(
+        data_path, train=True, download=True,
+        transform=transforms.ToTensor())
+    sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(dataset))))
+
     train_loader = torch.utils.data.DataLoader(
-        datasets.FashionMNIST('./data/fashion_mnist', train=True, download=True,
-                       transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
-        batch_size=train_batch_size, shuffle=True, num_workers=num_workers)
-    
+        dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
+
+    sampler = torch.utils.data.sampler.SubsetRandomSampler(range(DATA_SIZE, len(dataset)))
+
+    valid_loader = torch.utils.data.DataLoader(
+        dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
+
+    dataset = datasets.FashionMNIST(
+        data_path, train=False, download=True,
+        transform=transforms.ToTensor())
+    sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(dataset))))
+
     test_loader = torch.utils.data.DataLoader(
-        datasets.FashionMNIST('./data/fashion_mnist', train=False, transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
-        batch_size=test_batch_size, shuffle=True, num_workers=num_workers)
-    
-    return train_loader, test_loader
+        dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
+
+    return OrderedDict(train=train_loader, valid=valid_loader, test=test_loader)
+
 
 def add_subparser(parser):
-    mnist_parser = parser.add_parser('mnist', help='Arguments for dataset mnist')
+    fashionmnist_parser = parser.add_parser(
+        'fashionmnist', help='Arguments for dataset fashionmnist')
 
-    return mnist_parser
-
+    return fashionmnist_parser
