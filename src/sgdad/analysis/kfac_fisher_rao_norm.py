@@ -191,6 +191,7 @@ class ComputeFisherRaoNorm(object):
     def __call__(self, results, name, set_name, analysis_loader, training_loader, model, optimizer,
                  device):
 
+        model.train()
         batch_size = analysis_loader[0][0].size(0)
         nsamples = len(analysis_loader) * batch_size
 
