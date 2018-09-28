@@ -136,9 +136,11 @@ def main(argv=None):
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
         seed(seeds['sampler'] + engine.state.epoch)
+        model.train()
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def trainer_save_checkpoint(engine):
+        model.eval()
         train_metrics = evaluator.run(train_loader).metrics
         valid_metrics = evaluator.run(valid_loader).metrics
         test_metrics = evaluator.run(test_loader).metrics
