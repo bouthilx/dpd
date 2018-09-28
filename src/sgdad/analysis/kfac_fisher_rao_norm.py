@@ -25,7 +25,7 @@ class FisherRaoNormKFAC(Optimizer):
         self.params = []
         for mod in net.modules():
             mod_class = mod.__class__.__name__
-            if mod_class in ['Linear', 'Conv2d']:
+            if mod_class in ['Linear', 'Conv2d', 'BatchNorm2d']:
                 mod.register_forward_pre_hook(self._save_input)
                 mod.register_backward_hook(self._save_grad_output)
                 params = [mod.weight]
@@ -35,6 +35,8 @@ class FisherRaoNormKFAC(Optimizer):
                 if mod_class == 'Conv2d':
                     # Adding gathering filter for convolution
                     d['gathering_filter'] = self._get_gathering_filter(mod)
+                if mod_class == 'BatchNorm2d':
+                    d['eps'] = mod.eps
                 self.params.append(d)
         super(FisherRaoNormKFAC, self).__init__(self.params, {})
 
@@ -85,14 +87,24 @@ class FisherRaoNormKFAC(Optimizer):
         ggt = state['ggt']
         w = weight
         s = w.shape
-        if group['layer_type'] == 'Conv2d':
-            w = w.contiguous().view(s[0], s[1] * s[2] * s[3])
-        if bias is not None:
-            b = bias
-            w = torch.cat([w, b.view(b.shape[0], 1)], dim=1)
-        wn = torch.mm(torch.mm(ggt, w), xxt)
-        wn *= state['num_locations']  # TODO check
-        return (w * wn).sum()
+        if group['layer_type'] == 'BatchNorm2d':
+            if bias is not None:
+                b = bias
+                wn = torch.mv(xxt[:-1, :-1], w) + xxt[:-1, -1] * b
+                bn = xxt[-1, :-1] * w + xxt[-1, -1] * b
+                return (w * wn).sum() + (b * bn).sum()
+            else:
+                wn = torch.mv(ggt, torch.mv(xxt, w))
+                return (w * wn).sum()
+        else:
+            if group['layer_type'] == 'Conv2d':
+                w = w.contiguous().view(s[0], s[1] * s[2] * s[3])
+            if bias is not None:
+                b = bias
+                w = torch.cat([w, b.view(b.shape[0], 1)], dim=1)
+            wn = torch.mm(torch.mm(ggt, w), xxt)
+            wn *= state['num_locations']  # TODO check
+            return (w * wn).sum()
 
     def _compute_covs(self, group, state, nbatches):
         """Computes the covariances."""
@@ -104,6 +116,11 @@ class FisherRaoNormKFAC(Optimizer):
             x = F.conv2d(x, group['gathering_filter'],
                          stride=mod.stride, padding=mod.padding,
                          groups=mod.in_channels)
+            x = x.data.permute(1, 0, 2, 3).contiguous().view(x.shape[1], -1)
+        elif group['layer_type'] == 'BatchNorm2d':
+            # Here we apply BN to get the x normalized!
+            x = F.batch_norm(x, None, None, None, None, training=True,
+                             eps=group['eps'])
             x = x.data.permute(1, 0, 2, 3).contiguous().view(x.shape[1], -1)
         else:
             x = x.data.t()
@@ -117,12 +134,16 @@ class FisherRaoNormKFAC(Optimizer):
             state['xxt'].addmm_(mat1=x, mat2=x.t(), beta=1., alpha=1. / n)
         # Computation of ggt
         if group['layer_type'] == 'Conv2d':
-            gy = gy.data.permute(1, 0, 2, 3)
             state['num_locations'] = gy.shape[2] * gy.shape[3]
+            gy = gy.data.permute(1, 0, 2, 3)
+            gy = gy.contiguous().view(gy.shape[0], -1)
+        elif group['layer_type'] == 'BatchNorm2d':
+            state['num_locations'] = 1
+            gy = gy.data.permute(1, 0, 2, 3)
             gy = gy.contiguous().view(gy.shape[0], -1)
         else:
-            gy = gy.data.t()
             state['num_locations'] = 1
+            gy = gy.data.t()
         n = float(gy.shape[1] * nbatches)
         if 'ggt' not in state:
             state['ggt'] = torch.mm(gy, gy.t()) / n
