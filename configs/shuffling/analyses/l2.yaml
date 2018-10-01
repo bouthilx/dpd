@@ -9,4 +9,4 @@ query:
     epoch: 'overwrite-me'
 
 analyses:
-    - l2
+    l2: {}

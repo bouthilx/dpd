@@ -13,7 +13,7 @@ query:
     epoch: 'overwrite-me'
 
 analyses:
-    - bd_participation_ratio:
+    bd_participation_ratio:
         movement_samples: 100
         centered: True
         optimizer_params:

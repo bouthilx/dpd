@@ -137,13 +137,9 @@ def main(argv=None):
     print("\n\n")
 
     analyses = OrderedDict()
-    for analysis_config in config['analyses']:
-        if isinstance(analysis_config, str):
-            name = analysis_config
-            analysis_config = OrderedDict()
-        else:
-            name, analysis_config = next(iter(analysis_config.items()))
-        analysis_config['name'] = name
+    for name, analysis_config in config['analyses'].items():
+        if "name" not in analysis_config:
+            analysis_config['name'] = name
         analyses[name] = build_analysis(**analysis_config)
 
     statistics = OrderedDict()

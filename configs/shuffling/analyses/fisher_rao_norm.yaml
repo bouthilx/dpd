@@ -4,19 +4,6 @@ data:
             - train
             - valid
             - test
-    sphericalcow:
-        select:
-            - train
-            - valid
-            - test
-    shuffling10:
-        name: shuffling
-        select:
-            - train
-            - valid
-            - test
-        target: target
-        level: 1.0
 
 seed: 1
 
@@ -24,4 +11,4 @@ query:
     epoch: 'overwrite-me'
 
 analyses:
-    - fisher_rao_norm
+    fisher_rao_norm: {}
