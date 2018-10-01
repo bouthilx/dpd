@@ -21,9 +21,21 @@ setup(
     packages=find_namespace_packages('src'),
     install_requires=[],
     extras_require = {
-        'execute':  ['torch', 'torchvision', 'torchnet', 'pytorch-ignite', 'orion.core', 'tqdm'],
-        'deploy': ['kleio.core']
+        'execute':  [
+            'torch==0.4.0', 'torchvision', 'torchnet', 'pytorch-ignite', 'tqdm'],
+        'configure': [
+            'orion.core==2763188',
+            'orion.algo.skopt==1eadb37'],
+        'deploy': [
+            'kleio.core==0.1.0.a',
+            'flow==6354eff']
     },
+    dependency_links=[
+        "git+https://github.com/bouthilx/orion.git@2763188#egg=orion.core-2763188",
+        "git+https://gitlab.com/bouthilx/orion.algo.skopt.git@1eadb37#egg=orion.algo.skopt-1eadb37",
+        "git+https://github.com/epistimio/kleio.git@prototype#egg=kleio.core-0.1.0.a",
+        "git+https://github.com/bouthilx/flow.git@6354eff#egg=flow-6354eff",
+    ],
     setup_requires=['setuptools', 'pytest-runner'],
     tests_require=['pytest'],
     # "Zipped eggs don't play nicely with namespace packaging"
