@@ -16,7 +16,7 @@ setup(
     name='sgdad',
     description='',
     long_description=LONG_DESCRIPTION,
-    author_email='Xavier Bouthillier, Simon Guiroy',
+    author_email='Xavier Bouthillier, Simon Guiroy, Cesar Laurent',
     package_dir={'': 'src'},
     packages=find_namespace_packages('src'),
     install_requires=[],
@@ -24,15 +24,15 @@ setup(
         'execute':  [
             'torch==0.4.0', 'torchvision', 'torchnet', 'pytorch-ignite', 'tqdm'],
         'configure': [
-            'orion.core==2763188',
-            'orion.algo.skopt==1eadb37'],
+            'orion.core==db2d068',
+            'orion.algo.skopt==577aabf'],
         'deploy': [
             'kleio.core==0.1.0.a',
             'flow==6354eff']
     },
     dependency_links=[
-        "git+https://github.com/bouthilx/orion.git@2763188#egg=orion.core-2763188",
-        "git+https://gitlab.com/bouthilx/orion.algo.skopt.git@1eadb37#egg=orion.algo.skopt-1eadb37",
+        "git+https://github.com/bouthilx/orion.git@db2d068#egg=orion.core-db2d068",
+        "git+https://gitlab.com/bouthilx/orion.algo.skopt.git@577aabf#egg=orion.algo.skopt-577aabf",
         "git+https://github.com/epistimio/kleio.git@prototype#egg=kleio.core-0.1.0.a",
         "git+https://github.com/bouthilx/flow.git@6354eff#egg=flow-6354eff",
     ],

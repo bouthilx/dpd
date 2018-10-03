@@ -15,14 +15,15 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
-def build(movement_samples, centered, optimizer_params):
-    return ComputeBlockDiagonalParticipationRatio(movement_samples, centered, optimizer_params)
+def build(movement_samples, centered, batch_size, optimizer_params):
+    return ComputeTruncatedBlockDiagonalParticipationRatio(movement_samples, centered, batch_size, optimizer_params)
 
 
-class ComputeBlockDiagonalParticipationRatio(object):
-    def __init__(self, movement_samples, centered, optimizer_params):
+class ComputeTruncatedBlockDiagonalParticipationRatio(object):
+    def __init__(self, movement_samples, centered, batch_size, optimizer_params):
         self.movement_samples = movement_samples
         self.centered = centered
+        self.batch_size = batch_size
         self.optimizer_params = optimizer_params
 
     def _apply(self, fct, *args, **kwargs):
@@ -140,6 +141,13 @@ class ComputeBlockDiagonalParticipationRatio(object):
         data, target = data.to(self.device), target.to(self.device)
         self.optimizer.zero_grad()
         output = self.model(data)
+        if self.batch_size:
+            if self.batch_size > output.size(0):
+                raise RuntimeError(
+                    "Cannot compute loss over {} samples in a mini-batch of size {}".format(
+                        self.batch_size, output.size(0)))
+            output = output[:self.batch_size]
+            target = target[:self.batch_size]
         loss = F.cross_entropy(output, target)
         loss.backward()
         self.optimizer.step()

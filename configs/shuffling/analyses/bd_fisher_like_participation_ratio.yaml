@@ -1,6 +1,5 @@
 data:
     pump_out: 1000
-    batch_size: 1
     model:
         select:
             - train
@@ -16,6 +15,7 @@ analyses:
     bd_participation_ratio:
         movement_samples: 100
         centered: True
+        batch_size: 1
         optimizer_params:
             lr: 1.0
             momentum: 0.0

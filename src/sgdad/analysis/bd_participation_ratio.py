@@ -15,19 +15,20 @@ from sgdad.utils.cov import ApproximateMeter, CovarianceMeter
 logger = logging.getLogger(__name__)
 
 
-def build(movement_samples, centered, optimizer_params):
-    return ComputeBlockDiagonalParticipationRatio(movement_samples, centered, optimizer_params)
+def build(movement_samples, centered, batch_size, optimizer_params):
+    return ComputeBlockDiagonalParticipationRatio(movement_samples, centered, batch_size, optimizer_params)
 
 
 class ComputeBlockDiagonalParticipationRatio(object):
-    def __init__(self, movement_samples, centered, optimizer_params):
+    def __init__(self, movement_samples, centered, batch_size, optimizer_params):
         self.movement_samples = movement_samples
         self.centered = centered
+        self.batch_size = batch_size
         self.optimizer_params = optimizer_params
 
     def update_parameter_covs(self):
         keys = set()
-        for key, value in self.model.named_parameters():
+        for key, value in self.named_parameters():
             self.parameter_Cs[key].add(value.view(1, -1), n=1)
             # - reference_parameters[key].view(-1))
             keys.add(key)
@@ -87,16 +88,32 @@ class ComputeBlockDiagonalParticipationRatio(object):
         # shape is (batch_idx, sample_idx, dimension_idx)
         self.reference_function = torch.stack(references)
 
+    def named_parameters(self):
+        for name, module in self.model.named_modules():
+            if module.__class__.__name__ == 'BatchNorm2d':
+                w = copy.deepcopy(module.weight.data).unsqueeze(1)
+            elif module.__class__.__name__ == 'Conv2d':
+                w = copy.deepcopy(module.weight.data).view(module.weight.shape[0], -1).contiguous()
+            elif module.__class__.__name__ == 'Linear':
+                w = copy.deepcopy(module.weight.data)
+            else:
+                continue
+
+            if getattr(module, 'bias', None) is not None:
+                w = torch.cat([w, module.bias.unsqueeze(1)], dim=1)
+
+            yield name, w
+
     def compute_reference_parameters(self):
         self.reference_parameters = OrderedDict()
 
         self.reference_parameters.update(
-            OrderedDict((key, copy.deepcopy(value))
-                        for key, value in self.model.named_parameters()))
+            OrderedDict((key, copy.deepcopy(value.detach()))
+                        for key, value in self.named_parameters()))
 
     def initialize_covs(self):
         self.parameter_Cs = OrderedDict()
-        for key, value in self.model.named_parameters():
+        for key, value in self.named_parameters():
             size = numpy.prod(value.size())
             cov_meter = ApproximateMeter(
                 CovarianceMeter(centered=self.centered),
@@ -164,11 +181,28 @@ class ComputeBlockDiagonalParticipationRatio(object):
         return (root_enumerator ** 2) / denominator
 
     def make_one_step(self, mini_batch):
+        # TODO: Adjust loss to analysis mini-batch size
+        #       When model has batch-norm, we should compute forward on original batch-size but
+        #       compute the gradient only on the number of examples equal to analysis batch-size.
+        # NOTE: What if analysis batch size is larger than the original batch-size?
+
+        # If we want N batches, but batch-size != analysis-batch-size
+        # What is important is not the number of samples, but number of steps, thus number of
+        # batches. If we take analysis-batch-size in batch to compute the loss, then we are fine.
+        # NOTE: Should not support analysis-batch-size > batch-size, does not make sense
+
         self.model.train()
         data, target = mini_batch
         data, target = data.to(self.device), target.to(self.device)
         self.optimizer.zero_grad()
         output = self.model(data)
+        if self.batch_size:
+            if self.batch_size > output.size(0):
+                raise RuntimeError(
+                    "Cannot compute loss over {} samples in a mini-batch of size {}".format(
+                        self.batch_size, output.size(0)))
+            output = output[:self.batch_size]
+            target = target[:self.batch_size]
         loss = F.cross_entropy(output, target)
         loss.backward()
         self.optimizer.step()
