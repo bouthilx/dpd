@@ -21,9 +21,7 @@ from sgdad.utils.commandline import execute
 
 # Looks like main difference is the config path of script template and its options.
 
-KLEIO_TEMPLATE = """\
-kleio save --branch-original --config /config/kleio.core/kleio_config.yaml \
---tags {tags}"""
+KLEIO_TEMPLATE = "kleio save --branch-original --tags {tags}"
 
 EXECUTION_SCRIPT_TEMPLATE = (
     "python3.6 /repos/sgd-space/src/sgdad/train.py --config={file_path}")
@@ -48,15 +46,9 @@ FLOW_OPTIONS_TEMPLATE = "{array}mem=30000M;time=2:59:00;job-name={job_name}"
 
 FLOW_TEMPLATE = "flow-submit {container} --config {file_path} --options {options}{optionals}"
 
-SUBMIT_KLEIO_TEMPLATE = """\
-kleio run --allow-host-change \
---config /config/kleio.core/kleio_config.yaml \
---tags {tags}\
-"""
+SUBMIT_KLEIO_TEMPLATE = "kleio run --allow-host-change --tags {tags}"
 
 SUBMIT_COMMANDLINE_TEMPLATE = "{flow} launch {kleio}"
-
-CONTAINER_KLEIO_CONFIG = '/config/kleio.core/kleio_config.yaml'
 
 SUBMISSION_FILE_TEMPLATE = "{model}.{version}.sh"
 
@@ -78,10 +70,6 @@ CONFIG_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 
 
 def build_database():
-    if os.path.exists(CONTAINER_KLEIO_CONFIG):
-        with open(CONTAINER_KLEIO_CONFIG, 'r') as f:
-            return TrialBuilder().build_database({'config': f})
-
     # Rely on local config
     return TrialBuilder().build_database({})
 
