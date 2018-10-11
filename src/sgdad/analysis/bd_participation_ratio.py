@@ -15,20 +15,29 @@ from sgdad.utils.cov import ApproximateMeter, CovarianceMeter
 logger = logging.getLogger(__name__)
 
 
-def build(movement_samples, centered, batch_size, optimizer_params):
-    return ComputeBlockDiagonalParticipationRatio(movement_samples, centered, batch_size, optimizer_params)
+def build(movement_samples, center, normalize, batch_size, optimizer_params):
+    return ComputeBlockDiagonalParticipationRatio(movement_samples, center, normalize, batch_size, optimizer_params)
 
 
 class ComputeBlockDiagonalParticipationRatio(object):
-    def __init__(self, movement_samples, centered, batch_size, optimizer_params):
+    def __init__(self, movement_samples, center, normalize, batch_size, optimizer_params):
         self.movement_samples = movement_samples
-        self.centered = centered
+        self.center = center
+        self.normalize = normalize
         self.batch_size = batch_size
         self.optimizer_params = optimizer_params
+
+        if self.center and self.normalize:
+            raise RuntimeError(
+                "We cannot compute centering before normalizing. If normalize is true, "
+                "we assume the data is already centered before normalizing")
 
     def update_parameter_covs(self):
         keys = set()
         for key, value in self.named_parameters():
+            value -= self.reference_parameters[key]
+            if self.normalize:
+                value /= value.norm()
             self.parameter_Cs[key].add(value.view(1, -1), n=1)
             # - reference_parameters[key].view(-1))
             keys.add(key)
@@ -67,7 +76,9 @@ class ComputeBlockDiagonalParticipationRatio(object):
 
     def update_function_cov(self, batch_out_idx):
         movement = self.compute_movement(batch_out_idx)
-        self.function_C.add(movement.view(1, -1), n=1)
+        if self.normalize:
+            movement /= movement.norm()
+        self.function_C.add(movement.unsqueeze(0), n=1)
 
     def compute_references(self):
         self.compute_reference_parameters()
@@ -116,11 +127,11 @@ class ComputeBlockDiagonalParticipationRatio(object):
         for key, value in self.named_parameters():
             size = numpy.prod(value.size())
             cov_meter = ApproximateMeter(
-                CovarianceMeter(centered=self.centered),
+                CovarianceMeter(centered=not self.center),
                 n_dimensions=min(size, self.number_of_batches))
             self.parameter_Cs[key] = cov_meter
         # self.function_C = ApproximateMeter(CovarianceMeter(), n_dimensions=500)
-        self.function_C = CovarianceMeter(centered=self.centered)
+        self.function_C = CovarianceMeter(centered=not self.center)
 
     def make_original_checkpoint(self):
         self.original_model_state = copy.deepcopy(self.model.state_dict())

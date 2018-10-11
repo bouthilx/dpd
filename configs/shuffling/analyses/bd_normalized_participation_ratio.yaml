@@ -15,8 +15,6 @@ analyses:
     bd_participation_ratio:
         movement_samples: 100
         center: False
-        normalize: False
-        batch_size: 1
-        optimizer_params:
-            lr: 1.0
-            momentum: 0.0
+        normalize: True
+        batch_size: null
+        optimizer_params: {}

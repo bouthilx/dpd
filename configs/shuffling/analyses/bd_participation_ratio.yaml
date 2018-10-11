@@ -14,6 +14,7 @@ query:
 analyses:
     bd_participation_ratio:
         movement_samples: 100
-        centered: False
+        center: True
+        normalize: False
         batch_size: null
         optimizer_params: {}
