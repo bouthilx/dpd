@@ -1,7 +1,12 @@
+import logging
+
 import torch
 import torch.nn.functional as F
 
 from torch.optim.optimizer import Optimizer
+
+
+logger = logging.getLogger(__name__)
 
 
 def build():
@@ -21,11 +26,12 @@ class FisherRaoNormKFAC(Optimizer):
 
         """
         self.params = []
+        self.hooks = []
         for mod in net.modules():
             mod_class = mod.__class__.__name__
             if mod_class in ['Linear', 'Conv2d', 'BatchNorm2d']:
-                mod.register_forward_pre_hook(self._save_input)
-                mod.register_backward_hook(self._save_grad_output)
+                self.hooks.append(mod.register_forward_pre_hook(self._save_input))
+                self.hooks.append(mod.register_backward_hook(self._save_grad_output))
                 params = [mod.weight]
                 if mod.bias is not None:
                     params.append(mod.bias)
@@ -69,6 +75,23 @@ class FisherRaoNormKFAC(Optimizer):
             norm += self._get_norm_one_module(weight, bias, group, state)
         return norm
 
+    def get_projs(self):
+        """Returns the projection of theta on F"""
+        for group in self.param_groups:
+            if len(group['params']) == 2:
+                weight, bias = group['params']
+            else:
+                weight = group['params'][0]
+                bias = None
+            state = self.state[weight]
+
+            yield weight, self._get_proj_one_module(weight, bias, group, state)
+
+    def get_params(self):
+        """Returns the params used for projection keys"""
+        for group in self.param_groups:
+            yield group['params'][0]
+
     def _save_input(self, mod, i):
         """Saves input of layer to compute covariance."""
         if mod.training:
@@ -78,6 +101,31 @@ class FisherRaoNormKFAC(Optimizer):
         """Saves grad on output of layer to compute covariance."""
         if mod.training:
             self.state[mod]['gy'] = grad_output[0] * grad_output[0].size(0)
+
+    def _get_proj_one_module(self, weight, bias, group, state):
+        """Returns Ftheta for one layer, using K-FAC for F."""
+        xxt = state['xxt']
+        ggt = state['ggt']
+        w = weight
+        s = w.shape
+        if group['layer_type'] == 'BatchNorm2d':
+            if bias is not None:
+                b = bias
+                wn = torch.mv(xxt[:-1, :-1], w) + xxt[:-1, -1] * b
+                bn = xxt[-1, :-1] * w + xxt[-1, -1] * b
+                return torch.cat([wn.view(-1), bn.view(-1)])
+            else:
+                wn = torch.mv(ggt, torch.mv(xxt, w))
+                return wn
+        else:
+            if group['layer_type'] == 'Conv2d':
+                w = w.contiguous().view(s[0], s[1] * s[2] * s[3])
+            if bias is not None:
+                b = bias
+                w = torch.cat([w, b.view(b.shape[0], 1)], dim=1)
+            wn = torch.mm(torch.mm(ggt, w), xxt)
+            wn *= state['num_locations']  # TODO check
+            return wn
 
     def _get_norm_one_module(self, weight, bias, group, state):
         """Returns <theta, F theta> for one layer, using K-FAC for F."""
@@ -147,6 +195,11 @@ class FisherRaoNormKFAC(Optimizer):
             state['ggt'] = torch.mm(gy, gy.t()) / n
         else:
             state['ggt'].addmm_(mat1=gy, mat2=gy.t(), beta=1., alpha=1. / n)
+
+        del self.state[group['mod']]['x']
+        del self.state[group['mod']]['gy']
+        logger.info("Freing GPU mem")
+        torch.cuda.empty_cache()
 
     def _get_gathering_filter(self, mod):
         """Convolution filter that extracts input patches."""

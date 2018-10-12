@@ -1,0 +1,20 @@
+data:
+    pump_out: 1000
+    model:
+        select:
+            - train
+            - valid
+            - test
+
+seed: 1
+
+query:
+    epoch: 'overwrite-me'
+
+analyses:
+    bd_fisher_participation_ratio:
+        center: False
+        batch_size: 128
+        optimizer_params: {}
+            # lr: 1.0
+            # momentum: 0.0
