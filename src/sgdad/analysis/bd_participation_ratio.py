@@ -15,13 +15,14 @@ from sgdad.utils.cov import ApproximateMeter, CovarianceMeter
 logger = logging.getLogger(__name__)
 
 
-def build(movement_samples, center, normalize, batch_size, optimizer_params):
-    return ComputeBlockDiagonalParticipationRatio(movement_samples, center, normalize, batch_size, optimizer_params)
+def build(movement_samples, at_origin, center, normalize, batch_size, optimizer_params):
+    return ComputeBlockDiagonalParticipationRatio(movement_samples, at_origin, center, normalize, batch_size, optimizer_params)
 
 
 class ComputeBlockDiagonalParticipationRatio(object):
-    def __init__(self, movement_samples, center, normalize, batch_size, optimizer_params):
+    def __init__(self, movement_samples, at_origin, center, normalize, batch_size, optimizer_params):
         self.movement_samples = movement_samples
+        self.at_origin = at_origin
         self.center = center
         self.normalize = normalize
         self.batch_size = batch_size
@@ -35,7 +36,8 @@ class ComputeBlockDiagonalParticipationRatio(object):
     def update_parameter_covs(self):
         keys = set()
         for key, value in self.named_parameters():
-            value -= self.reference_parameters[key]
+            if self.at_origin:
+                value -= self.reference_parameters[key]
             if self.normalize:
                 value /= value.norm()
             self.parameter_Cs[key].add(value.view(1, -1), n=1)
@@ -220,8 +222,8 @@ class ComputeBlockDiagonalParticipationRatio(object):
 
     def update_covs(self, batch_idx):
         # self.compute_parameter_diff(
-        self.update_parameter_covs()
         self.update_function_cov(batch_idx)
+        self.update_parameter_covs()
 
     def set_optimizer_params(self):
 

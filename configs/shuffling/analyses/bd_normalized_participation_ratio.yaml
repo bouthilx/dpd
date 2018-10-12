@@ -14,6 +14,7 @@ query:
 analyses:
     bd_participation_ratio:
         movement_samples: 100
+        at_origin: True
         center: False
         normalize: True
         batch_size: null
