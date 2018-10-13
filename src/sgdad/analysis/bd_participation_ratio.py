@@ -2,6 +2,8 @@ from collections import OrderedDict
 import copy
 import logging
 
+from kleio.client.logger import kleio_logger
+
 import numpy
 
 import torch
@@ -13,6 +15,9 @@ from sgdad.utils.cov import ApproximateMeter, CovarianceMeter
 
 
 logger = logging.getLogger(__name__)
+
+
+DISABLE_TQDM = kleio_logger.trial is not None
 
 
 def build(movement_samples, at_origin, center, normalize, batch_size, optimizer_params):
@@ -156,11 +161,14 @@ class ComputeBlockDiagonalParticipationRatio(object):
         self.initialize_covs()
         self.compute_references()
 
-        for batch_idx, mini_batch in enumerate(tqdm(self.training_loader, desc='computing points')):
+        iterator = tqdm(self.training_loader, desc='computing points', disable=DISABLE_TQDM)
+        for batch_idx, mini_batch in enumerate(iterator):
             self.restore_checkpoint()
             self.make_one_step(mini_batch)
             with torch.no_grad():
                 self.update_covs(batch_idx)
+            if DISABLE_TQDM:
+                print("batch {:04d} done".format(batch_idx))
 
         self.restore_checkpoint()
         self.destroy_checkpoint()

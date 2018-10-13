@@ -19,6 +19,9 @@ from sgdad.analysis.base import build_analysis
 from sgdad.utils.yaml import ordered_load
 
 
+DISABLE_TQDM = kleio_logger.trial is not None
+
+
 def analysis_already_exists(trial, query):
     if kleio_logger.trial is None:
         return False
@@ -105,7 +108,7 @@ def main(argv=None):
     pump_out_n_batches = config['data'].pop('pump_out', None)
     batch_size = config['data'].pop('batch_size', None)
     training_loader = pump_out(dataset['train'], pump_out_n_batches, batch_size, _desc='train')
-    for name, data_config in tqdm(config['data'].items()):
+    for name, data_config in tqdm(config['data'].items(), disable=DISABLE_TQDM):
         print("Preparing {}".format(name))
         if name == "model":
             print("({})".format(trial_config['data']['name']))
@@ -202,11 +205,11 @@ def pump_out(loader, number_of_batches, batch_size=None, _desc=None):
     if number_of_batches is None:
         # TODO: Make this generic to adapt to any datasets
         N = 10000 / batch_size  # Smallest sets in MNIST and CIFAR10
-        return [batch for batch in tqdm(loader, desc=_desc)][:int(N)]
+        return [batch for batch in tqdm(loader, desc=_desc, disable=DISABLE_TQDM)][:int(N)]
 
     batches = []
     iterator =  tqdm(enumerate(infinite.extend(loader)), total=number_of_batches, leave=True,
-                     desc=_desc)
+                     desc=_desc, disable=DISABLE_TQDM)
     for i, batch in iterator:
         if i >= number_of_batches:
             iterator.close()

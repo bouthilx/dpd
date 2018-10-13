@@ -2,6 +2,8 @@ from collections import OrderedDict
 import copy
 import logging
 
+from kleio.client.logger import kleio_logger
+
 import numpy
 
 import torch
@@ -15,6 +17,8 @@ from sgdad.utils.cov import ApproximateMeter, CovarianceMeter
 
 logger = logging.getLogger(__name__)
 input = lambda msg: None
+
+DISABLE_TQDM = kleio_logger.trial is not None
 
 
 class BatchsizeError(Exception):
@@ -117,13 +121,16 @@ class ComputeBlockDiagonalParticipationRatio(object):
         self.number_of_batches = len(self.training_loader)
         print("Analysing participation ratio on {} batches".format(self.number_of_batches))
 
-        for batch_idx, mini_batch in enumerate(tqdm(self.training_loader, desc='computing points')):
+        iterator = tqdm(self.training_loader, desc='computing points', disable=DISABLE_TQDM)
+        for batch_idx, mini_batch in enumerate(iterator):
             self.restore_checkpoint()
             try:
                 self.make_one_step(mini_batch)
             except BatchsizeError:
                 continue
             self.update_covs(batch_idx)
+            if DISABLE_TQDM:
+                print("batch {:04d} done".format(batch_idx))
 
         self.restore_checkpoint()
         self.destroy_checkpoint()
