@@ -75,7 +75,7 @@ def build_experiment(**kwargs):
         print("\n\nUsing GPU\n\n")
         device = torch.device('cuda')
     else:
-        print("\n\nUsing CPU\n\n")
+        raise RuntimeError("GPU not available")
 
     print("\n\nConfiguration\n")
     pprint.pprint(config)
