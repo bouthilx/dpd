@@ -9,7 +9,7 @@ export CERTIFICATE_FOLDER=$HOME/certs
 export CONTAINER_HOME=$SCRATCH/home
 export CONTAINER_CONFIG=$HOME/.singularity.config
 
-export SGD_SPACE_DATA_PATH=/data
+export REPRO_DATA_PATH=/data
 export KLEIO_DATABASE_FILE_DIR=/data/kleio
 
 export PYTHONUNBUFFERED=1

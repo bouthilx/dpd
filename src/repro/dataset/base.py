@@ -8,10 +8,10 @@ factories = fetch_factories('repro.dataset', __file__)
 
 
 def set_data_path(config):
-    if "SGD_SPACE_DATA_PATH" not in os.environ:
-        raise RuntimeError("Environment variable SGD_SPACE_DATA_PATH is not set")
+    if "REPRO_DATA_PATH" not in os.environ:
+        raise RuntimeError("Environment variable REPRO_DATA_PATH is not set")
 
-    config['data_path'] = os.environ['SGD_SPACE_DATA_PATH']
+    config['data_path'] = os.environ['REPRO_DATA_PATH']
 
 
 def build_dataset(name=None, **kwargs):
