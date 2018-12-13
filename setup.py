@@ -22,7 +22,7 @@ setup(
     install_requires=[],
     extras_require = {
         'execute':  [
-            'torch==0.4.0', 'torchvision', 'torchnet', 'pytorch-ignite', 'tqdm'],
+            'torch==1.0.0', 'torchvision', 'torchnet', 'pytorch-ignite', 'tqdm'],
         'configure': [
             'orion.core==db2d068',
             'orion.algo.skopt==577aabf'],
