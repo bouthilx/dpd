@@ -1,10 +1,10 @@
 import os
 
-from sgdad.utils.factory import fetch_factories
-from sgdad.dataset.wrapper.base import build_wrapper
+from repro.utils.factory import fetch_factories
+from repro.dataset.wrapper.base import build_wrapper
 
 
-factories = fetch_factories('sgdad.dataset', __file__)
+factories = fetch_factories('repro.dataset', __file__)
 
 
 def set_data_path(config):

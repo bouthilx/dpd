@@ -1,4 +1,4 @@
-from sgdad.model.resnet import Bottleneck, ResNet
+from repro.model.resnet import Bottleneck, ResNet
 
 
 def build(input_size, conv, maxpool, avgpool, num_classes):

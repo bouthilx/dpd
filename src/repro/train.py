@@ -18,9 +18,9 @@ import torch
 import torch.nn.functional as F
 
 import yaml
-from sgdad.dataset.base import build_dataset
-from sgdad.model.base import build_model, load_checkpoint, save_checkpoint
-from sgdad.optimizer.base import build_optimizer
+from repro.dataset.base import build_dataset
+from repro.model.base import build_model, load_checkpoint, save_checkpoint
+from repro.optimizer.base import build_optimizer
 
 
 EPOCS_TO_SAVE = list(range(6)) + [10, 15, 20, 25, 50, 75, 100, 150, 200, 250, 300]

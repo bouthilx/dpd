@@ -1,8 +1,8 @@
-from sgdad.model.vgg import VGG, cfg
+from repro.model.vgg import VGG, cfg
 
 
 def build(input_size, batch_norm, num_classes):
-    layers = cfg['vgg11']
+    layers = cfg['vgg19']
     if input_size == [1, 28, 28]:
         layers.pop(-1)
     return VGG(layers, input_size=input_size, init_weights=True, batch_norm=batch_norm,

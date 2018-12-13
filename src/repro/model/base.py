@@ -4,10 +4,10 @@ from kleio.client.logger import kleio_logger
 
 import torch
 
-from sgdad.utils.factory import fetch_factories
+from repro.utils.factory import fetch_factories
 
 
-factories = fetch_factories('sgdad.model', __file__)
+factories = fetch_factories('repro.model', __file__)
 
 
 def build_model(name=None, **kwargs):

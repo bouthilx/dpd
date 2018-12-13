@@ -1,4 +1,4 @@
-from sgdad.model.vgg import VGG, cfg
+from repro.model.vgg import VGG, cfg
 
 
 def build(input_size, batch_norm, num_classes):

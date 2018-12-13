@@ -13,7 +13,7 @@ with open(path.join(HERE, 'README.md'), encoding='utf-8') as f:
 
 
 setup(
-    name='sgdad',
+    name='repro',
     description='',
     long_description=LONG_DESCRIPTION,
     author_email='Xavier Bouthillier, Simon Guiroy, Cesar Laurent',

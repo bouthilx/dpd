@@ -10,7 +10,7 @@ from kleio.core.utils import sorteddict, flatten, unflatten
 
 import yaml
 
-from sgdad.utils.commandline import execute
+from repro.utils.commandline import execute
 
 
 # add job-name to submissions, something like {command}{experiment}{dataset}{model}{version}
@@ -24,7 +24,7 @@ from sgdad.utils.commandline import execute
 KLEIO_TEMPLATE = "kleio save --branch-original --tags {tags}"
 
 EXECUTION_SCRIPT_TEMPLATE = (
-    "python3.6 /repos/sgd-space/src/sgdad/train.py --config={file_path}")
+    "python3.6 /repos/repro/src/repro/train.py --config={file_path}")
 
 REGISTER_COMMANDLINE_TEMPLATE = "{kleio} {script}"
 
@@ -33,10 +33,10 @@ REGISTER_COMMANDLINE_TEMPLATE = "{kleio} {script}"
 ####
 
 # Note: When computing analysis, config passed in configs/some/path/config.yaml
-#       Prepend /repos/sgd-space/ before running the save script.
+#       Prepend /repos/repro/ before running the save script.
 
 ANALYSIS_SCRIPT_TEMPLATE = (
-    "python3.6 /repos/sgd-space/src/sgdad/analyze.py --config={file_path} --trial-id {trial_id}")
+    "python3.6 /repos/repro/src/repro/analyze.py --config={file_path} --trial-id {trial_id}")
 
 ####
 # Submit identical for execution and analysis, only differs for tags, array and job-name
@@ -61,11 +61,11 @@ def assert_env(name):
         raise RuntimeError("Environement variable ${} is not set.".format(name))
 
 
-assert_env('SGD_SPACE_SUBMISSION_DIR')
-assert_env('SGD_SPACE_HASH_DIR')
+assert_env('REPRO_SUBMISSION_DIR')
+assert_env('REPRO_HASH_DIR')
 
-SUBMISSION_ROOT = os.environ['SGD_SPACE_SUBMISSION_DIR']
-HASH_DIR = os.environ['SGD_SPACE_HASH_DIR']
+SUBMISSION_ROOT = os.environ['REPRO_SUBMISSION_DIR']
+HASH_DIR = os.environ['REPRO_HASH_DIR']
 CONFIG_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  'configs')
 
 
