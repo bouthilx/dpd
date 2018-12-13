@@ -5,7 +5,7 @@ import random
 import numpy
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
-from ignite.metrics import CategoricalAccuracy, Loss
+from ignite.metrics import Accuracy, Loss
 
 from kleio.core.io.resolve_config import merge_configs
 from kleio.core.utils import unflatten
@@ -23,13 +23,25 @@ from repro.model.base import build_model, load_checkpoint, save_checkpoint
 from repro.optimizer.base import build_optimizer
 
 
-EPOCS_TO_SAVE = list(range(6)) + [10, 15, 20, 25, 50, 75, 100, 150, 200, 250, 300]
+EPOCS_TO_SAVE = list(range(25, 350, 25))
 
 
 def update(config, arguments):
     pairs = [argument.split("=") for argument in arguments]
     kwargs = unflatten(dict((pair[0], eval(pair[1])) for pair in pairs))
     return merge_configs(config, kwargs)
+
+
+def update_lr(lr, optimizer, epoch):
+    if epoch < 150:
+        new_lr = lr
+    elif epoch < 250:
+        new_lr = lr / 10
+    else:
+        new_lr = lr / 100
+
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = new_lr
 
 
 def build_experiment(**kwargs):
@@ -93,7 +105,7 @@ def build_experiment(**kwargs):
     pprint.pprint(optimizer)
     print("\n\n")
 
-    return dataset, model, optimizer, device, seeds
+    return dataset, model, optimizer, device, seeds, config
 
 
 def main(argv=None):
@@ -108,7 +120,7 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
 
-    dataset, model, optimizer, device, seeds = build_experiment(**vars(args))
+    dataset, model, optimizer, device, seeds, config = build_experiment(**vars(args))
 
     train_loader = dataset['train']
     valid_loader = dataset['valid']
@@ -117,7 +129,7 @@ def main(argv=None):
     trainer = create_supervised_trainer(
         model, optimizer, torch.nn.functional.cross_entropy, device=device)
     evaluator = create_supervised_evaluator(
-        model, metrics={'accuracy': CategoricalAccuracy(),
+        model, metrics={'accuracy': Accuracy(),
                         'nll': Loss(F.cross_entropy)},
         device=device)
 
@@ -136,6 +148,7 @@ def main(argv=None):
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
         seed(seeds['sampler'] + engine.state.epoch)
+        update_lr(config['optimizer']['lr'], optimizer, engine.state.epoch)
         model.train()
 
     @trainer.on(Events.EPOCH_COMPLETED)
@@ -169,7 +182,7 @@ def main(argv=None):
                             iteration=engine.state.iteration)
 
     print("Training")
-    trainer.run(train_loader, max_epochs=300)
+    trainer.run(train_loader, max_epochs=350)
 
     evaluator.run(valid_loader)
     accuracy = evaluator.state.metrics['accuracy']
