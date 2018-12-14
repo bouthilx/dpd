@@ -1,10 +1,10 @@
 data:
-    name: fashionmnist
+    name: cifar10
     batch_size: 128
     num_workers: 5
 
 model:
-    name: resnet50
+    name: resnet34
     conv:
         kernel_size: 3
         stride: 1
