@@ -23,7 +23,7 @@ from repro.model.base import build_model, load_checkpoint, save_checkpoint
 from repro.optimizer.base import build_optimizer
 
 
-EPOCS_TO_SAVE = list(range(25, 350, 25))
+EPOCS_TO_SAVE = list(range(25, 200, 25))
 
 
 def update(config, arguments):
@@ -33,9 +33,11 @@ def update(config, arguments):
 
 
 def update_lr(lr, optimizer, epoch):
-    if epoch < 150:
+    if epoch < 1:
+        new_lr = lr / 10
+    elif epoch < 60:
         new_lr = lr
-    elif epoch < 250:
+    elif epoch < 120:
         new_lr = lr / 10
     else:
         new_lr = lr / 100
@@ -182,7 +184,7 @@ def main(argv=None):
                             iteration=engine.state.iteration)
 
     print("Training")
-    trainer.run(train_loader, max_epochs=350)
+    trainer.run(train_loader, max_epochs=200)
 
     evaluator.run(valid_loader)
     accuracy = evaluator.state.metrics['accuracy']
@@ -194,13 +196,13 @@ def main(argv=None):
 
 def seed(seed):
     if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = False
 
-    random.seed(seed)
-    numpy.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    # random.seed(seed)
+    # numpy.random.seed(seed)
+    # torch.manual_seed(seed)
+    # torch.cuda.manual_seed_all(seed)
 
 
 if __name__ == "__main__":
