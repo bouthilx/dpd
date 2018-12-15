@@ -1,0 +1,16 @@
+data:
+    name: svhn
+    batch_size: 128
+    num_workers: 5
+
+model:
+    name: densenet121
+
+optimizer:
+    name: sgd
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 0.0001
+    
+model_seed: 'overwrite-me'
+sampler_seed: 'overwrite-me'
