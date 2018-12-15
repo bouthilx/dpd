@@ -1,0 +1,16 @@
+data:
+    name: mnist
+    batch_size: 128
+    num_workers: 5
+
+model:
+    name: mobilenetv2
+
+optimizer:
+    name: sgd
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 0.0005
+    
+model_seed: 'overwrite-me'
+sampler_seed: 'overwrite-me'
