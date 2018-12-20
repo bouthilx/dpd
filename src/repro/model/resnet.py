@@ -109,7 +109,7 @@ class ResNet(nn.Module):
         if maxpool:
             # For ImageNet
             # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-            self.maxpool(**maxpool)
+            self.maxpool = nn.MaxPool2d(**maxpool)
         else:
             self.maxpool = None
 
