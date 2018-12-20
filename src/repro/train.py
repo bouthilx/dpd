@@ -18,6 +18,8 @@ from orion.client import report_results
 import torch
 import torch.nn.functional as F
 
+import tqdm
+
 import yaml
 from repro.dataset.base import build_dataset
 from repro.model.base import build_model, load_checkpoint, save_checkpoint
@@ -140,6 +142,31 @@ def main(argv=None):
 
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
 
+    @evaluator.on(Events.STARTED)
+    def start_iterator(engine):
+        if kleio_logger.trial is None:
+            engine.pbar = tqdm.tqdm(total=len(engine.state.dataloader), leave=False, desc='Evaluation')
+
+    @evaluator.on(Events.ITERATION_COMPLETED)
+    def start_iterator(engine):
+        if hasattr(engine, 'pbar'):
+            engine.pbar.update()
+
+    @evaluator.on(Events.COMPLETED)
+    def start_iterator(engine):
+        if hasattr(engine, 'pbar'):
+            engine.pbar.close()
+
+    @trainer.on(Events.EPOCH_STARTED)
+    def start_iterator(engine):
+        if kleio_logger.trial is None:
+            engine.pbar = tqdm.tqdm(total=len(engine.state.dataloader), leave=False, desc='Training')
+
+    @trainer.on(Events.ITERATION_COMPLETED)
+    def start_iterator(engine):
+        if hasattr(engine, 'pbar'):
+            engine.pbar.update()
+
     @trainer.on(Events.STARTED)
     def trainer_load_checkpoint(engine):
         metadata = load_checkpoint(model, optimizer, 'checkpoint')
@@ -160,6 +187,9 @@ def main(argv=None):
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def trainer_save_checkpoint(engine):
+        if hasattr(engine, 'pbar'):
+            engine.pbar.close()
+
         model.eval()
         train_metrics = evaluator.run(train_loader).metrics
         valid_metrics = evaluator.run(valid_loader).metrics
