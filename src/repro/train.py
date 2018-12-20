@@ -5,6 +5,7 @@ import random
 import numpy
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
+from ignite.handlers.timing import Timer
 from ignite.metrics import Accuracy, Loss
 
 from kleio.core.io.resolve_config import merge_configs
@@ -124,6 +125,8 @@ def main(argv=None):
 
     dataset, model, optimizer, device, seeds, config = build_experiment(**vars(args))
 
+    timer = Timer(average=True)
+
     train_loader = dataset['train']
     valid_loader = dataset['valid']
     test_loader = dataset['test']
@@ -134,6 +137,8 @@ def main(argv=None):
         model, metrics={'accuracy': Accuracy(),
                         'nll': Loss(F.cross_entropy)},
         device=device)
+
+    timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
 
     @trainer.on(Events.STARTED)
     def trainer_load_checkpoint(engine):
@@ -176,8 +181,8 @@ def main(argv=None):
             ),
         })
 
-        print("Epoch {:>4} Iteration {:>8} Loss {:>12}".format(
-            engine.state.epoch, engine.state.iteration, engine.state.output))
+        print("Epoch {:>4} Iteration {:>8} Loss {:>12} Time {:>6}".format(
+            engine.state.epoch, engine.state.iteration, engine.state.output, timer.value()))
         if engine.state.epoch in EPOCS_TO_SAVE:
             save_checkpoint(model, optimizer, 'checkpoint',
                             epoch=engine.state.epoch,
