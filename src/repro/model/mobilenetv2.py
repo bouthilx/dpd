@@ -40,22 +40,27 @@ class Block(nn.Module):
 
 class MobileNetV2(nn.Module):
     # (expansion, out_planes, num_blocks, stride)
-    cfg = [(1,  16, 1, 1),
-           (6,  24, 2, 1),  # NOTE: change stride 2 -> 1 for CIFAR10
-           (6,  32, 3, 2),
-           (6,  64, 4, 2),
-           (6,  96, 3, 1),
-           (6, 160, 3, 2),
-           (6, 320, 1, 1)]
-
-    def __init__(self, input_size, num_classes=10):
+    def __init__(self, input_size, conv, avgpool, num_classes=10):
         super(MobileNetV2, self).__init__()
-        # NOTE: change conv1 stride 2 -> 1 for CIFAR10
-        self.conv1 = nn.Conv2d(input_size[0], 32, kernel_size=3, stride=1, padding=1, bias=False)
+
+        self.cfg = [[1,  16, 1, 1],
+                    [6,  24, 2, 1],  # NOTE: change stride 2 -> 1 for CIFAR10
+                    [6,  32, 3, 2],
+                    [6,  64, 4, 2],
+                    [6,  96, 3, 1],
+                    [6, 160, 3, 2],
+                    [6, 320, 1, 1]]
+
+        # Dirty hack to detect if built for ImageNet...
+        if avgpool.get('kernel_size', 0) == 7:
+            self.cfg[1][-1] = 2
+
+        self.conv1 = nn.Conv2d(input_size[0], 32, **conv, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
         self.layers = self._make_layers(in_planes=32)
         self.conv2 = nn.Conv2d(320, 1280, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn2 = nn.BatchNorm2d(1280)
+        self.avgpool = nn.AvgPool2d(**avgpool)
         self.linear = nn.Linear(1280, num_classes)
 
     def _make_layers(self, in_planes):
@@ -71,12 +76,11 @@ class MobileNetV2(nn.Module):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layers(out)
         out = F.relu(self.bn2(self.conv2(out)))
-        # NOTE: change pooling kernel_size 7 -> 4 for CIFAR10
-        out = F.avg_pool2d(out, 4)
+        out = self.avgpool(out)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
         return out
 
 
-def build(input_size, num_classes):
-    return MobileNetV2(input_size, num_classes=num_classes)
+def build(input_size, num_classes, conv, avgpool):
+    return MobileNetV2(input_size, conv, avgpool, num_classes=num_classes)

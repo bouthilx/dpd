@@ -5,6 +5,12 @@ data:
 
 model:
     name: mobilenetv2
+    conv:
+      kernel_size: 3
+      stride: 1
+      padding: 1
+    avgpool:
+      kernel_size: 4
 
 optimizer:
     name: sgd
