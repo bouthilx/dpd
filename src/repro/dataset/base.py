@@ -20,17 +20,18 @@ def build_dataset(name=None, **kwargs):
     wrapper = kwargs.pop('wrapper', None)
     data = factories[name](**kwargs)
 
-    # Get one batch
-    data['input_size'] = 0
-    data['num_classes'] = 0
+    if 'input_size' not in data or 'num_classes' not in data:
+        # Get one batch
+        data['input_size'] = 0
+        data['num_classes'] = 0
 
-    # Run over many mini-batches to make sure all classes are seen
-    for i, (source, target) in enumerate(data['train']):
-        data['input_size'] = list(source.size()[1:])
-        data['num_classes'] = max(data['num_classes'], target.max().item() + 1)
+        # Run over many mini-batches to make sure all classes are seen
+        for i, (source, target) in enumerate(data['train']):
+            data['input_size'] = list(source.size()[1:])
+            data['num_classes'] = max(data['num_classes'], target.max().item() + 1)
 
-        if i > 20:
-            break
+            if i > 20:
+                break
 
     if wrapper:
         data = build_wrapper(data, **wrapper)
