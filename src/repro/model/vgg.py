@@ -35,22 +35,22 @@ cfg = {
 
 class VGG(nn.Module):
 
-    def __init__(self, layers, input_size, init_weights, batch_norm, num_classes):
+    def __init__(self, layers, input_size, init_weights, batch_norm, classifier, num_classes):
         super(VGG, self).__init__()
         self.features = self.make_layers(input_size[0], layers, batch_norm)
         
-        self.classifier = nn.Linear(512, num_classes)
-            
-        # elif self.dataset == 'imagenet':
-        #     self.classifier = nn.Sequential(
-        #         nn.Linear(512 * 7 * 7, 4096),
-        #         nn.ReLU(True),
-        #         nn.Dropout(),
-        #         nn.Linear(4096, 4096),
-        #         nn.ReLU(True),
-        #         nn.Dropout(),
-        #         nn.Linear(4096, num_classes),
-        #     )
+        if classifier.get('hidden'):
+            self.classifier = nn.Sequential(
+                nn.Linear(classifier['input'], classifier['hidden']),
+                nn.ReLU(True),
+                nn.Dropout(),
+                nn.Linear(classifier['hidden'], classifier['hidden']),
+                nn.ReLU(True),
+                nn.Dropout(),
+                nn.Linear(classifier['hidden'], num_classes),
+            )
+        else:
+            self.classifier = nn.Linear(classifier['input'], num_classes)
             
         if init_weights:
             self._initialize_weights()
@@ -94,3 +94,30 @@ class VGG(nn.Module):
     def save_computations(self, input, output):
         setattr(self, "input", input)
         setattr(self, "output", output)
+
+
+def distribute(model, distributed):
+    # AlexNet and VGG should be treated differently
+    #         # DataParallel will divide and allocate batch_size to all available GPUs
+    #         if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
+    #             model.features = torch.nn.DataParallel(model.features)
+    #             model.cuda()
+    #         else:
+    #             model = torch.nn.DataParallel(model).cuda()
+
+    # Because last fc layer is big and not suitable for DataParallel
+    # Source: https://github.com/pytorch/examples/issues/144
+
+    if distributed > 1:
+        if distributed != torch.cuda.device_count():
+            raise RuntimeError("{} GPUs are required by the configuration but {} are currently "
+                               "made available to the process.".format(
+                                   distributed, torch.cuda.device_count()))
+
+        if isinstance(model.features, nn.Sequential):
+            model.features = torch.nn.DataParallel(model.features).cuda()
+            model.cuda()
+        else:
+            model = torch.nn.DataParallel(model).cuda()
+
+    return model

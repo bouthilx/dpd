@@ -1,9 +1,8 @@
-from repro.model.vgg import VGG, cfg
+from repro.model.vgg import VGG, distribute, cfg
 
 
-def build(input_size, batch_norm, num_classes):
-    layers = cfg['vgg19']
-    # if input_size == [1, 28, 28]:
-    #     layers.pop(-1)
-    return VGG(layers, input_size=input_size, init_weights=True, batch_norm=batch_norm,
-               num_classes=num_classes)
+def build(input_size, batch_norm, classifier, num_classes, distributed=0):
+    model = VGG(cfg['vgg19'], input_size=input_size, init_weights=True, batch_norm=batch_norm,
+                classifier=classifier, num_classes=num_classes)
+
+    return distribute(model, distributed)

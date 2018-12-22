@@ -6,6 +6,9 @@ data:
 model:
     name: vgg16
     batch_norm: True
+    classifier:
+        input: 512
+        hidden: null
 
 optimizer:
     name: sgd

@@ -1,14 +1,14 @@
 data:
-    name: svhn
+    name: tinyimagenet 
     batch_size: 128
     num_workers: 5
 
 model:
-    name: vgg16
+    name: vgg13
     batch_norm: True
     classifier:
-        input: 512
-        hidden: null
+        input: 2048
+        hidden: 1024
 
 optimizer:
     name: sgd
