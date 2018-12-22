@@ -5,6 +5,8 @@ data:
 
 model:
     name: mobilenet
+    avgpool:
+      kernel_size: 2
 
 optimizer:
     name: sgd

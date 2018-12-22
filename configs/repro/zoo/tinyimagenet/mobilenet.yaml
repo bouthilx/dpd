@@ -1,12 +1,12 @@
 data:
-    name: fashionmnist
+    name: tinyimagenet 
     batch_size: 128
     num_workers: 5
 
 model:
     name: mobilenet
     avgpool:
-      kernel_size: 2
+      kernel_size: 7
 
 optimizer:
     name: sgd
