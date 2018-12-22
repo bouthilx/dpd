@@ -73,7 +73,7 @@ def download(data_path):
 
         file_size_dl = 0
         block_sz = 8192
-        pbar = tqdm.tqdm(total=file_size, desc='TinyImageNet')
+        pbar = tqdm(total=file_size, desc='TinyImageNet')
         while True:
             buffer = u.read(block_sz)
             if not buffer:
