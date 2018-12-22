@@ -35,16 +35,16 @@ VAL_FILENAME = 'tinyimagenet_val.h5'
 # TEST_FILENAME = 'tinyimagenet_test.h5'
 
 
-def zipfile_path(data_path):
+def get_zipfile_path(data_path):
     return os.path.join(data_path, ZIP_FILENAME)
 
 
-def dirpath(data_path):
+def get_dirpath(data_path):
     return os.path.join(data_path, DIRNAME)
 
 
 def all_hdf5_exists(data_path):
-    return all(os.path.exists(os.path.join(data_path, DIRNAME, filename))
+    return all(os.path.exists(os.path.join(data_path, filename))
                for filename in [TRAIN_FILENAME, VAL_FILENAME])
 
 
@@ -65,16 +65,16 @@ def build_dataset(data_path, timeout=10 * 60):
 
 
 def download(data_path):
-    if os.path.exists(zipfile_path(data_path)):
+    if os.path.exists(get_zipfile_path(data_path)):
         print("Zip file already downloaded")
         return
 
     # download 
     url = 'http://cs231n.stanford.edu/tiny-imagenet-200.zip'
     u = urllib.request.urlopen(url)
-    with open(zipfile_path(data_path), 'wb') as f:
+    with open(get_zipfile_path(data_path), 'wb') as f:
         file_size = int(dict(u.getheaders())['Content-Length']) / (10.0**6)
-        print("Downloading: {} ({}MB)".format(zipfile_path(data_path), file_size))
+        print("Downloading: {} ({}MB)".format(get_zipfile_path(data_path), file_size))
 
         file_size_dl = 0
         block_sz = 8192
@@ -91,22 +91,22 @@ def download(data_path):
 
 def unzip(data_path):
     print("Unzipping files...")
-    with zipfile.ZipFile(zipfile_path(data_path), 'r') as zip_ref:
+    with zipfile.ZipFile(get_zipfile_path(data_path), 'r') as zip_ref:
         zip_ref.extractall(data_path)
     print("Done")
 
 
 def clean(data_path):
     print("Deleting unzipped files...")
-    shutil.rmtree(dirpath(data_path))
+    shutil.rmtree(get_dirpath(data_path))
 
 
 def create_hdf5(data_path):
     create_hdf5_train(
-        dirpath, os.path.join(data_path, 'tinyimagenet_train.h5'))
+        get_dirpath(data_path), os.path.join(data_path, 'tinyimagenet_train.h5'))
 
     create_hdf5_val(
-        dirpath, os.path.join(data_path, 'tinyimagenet_val.h5'))
+        get_dirpath(data_path), os.path.join(data_path, 'tinyimagenet_val.h5'))
 
 
 def create_train_loader(dirpath):
@@ -179,7 +179,7 @@ def build(batch_size, data_path, num_workers):
     build_dataset(data_path)
 
     dataset = HDF5Dataset(
-        os.path.join(data_path, DIRNAME, TRAIN_FILENAME),
+        os.path.join(data_path, TRAIN_FILENAME),
         transforms.Compose([
             # data is stored as uint8
             transforms.ToPILImage(),
@@ -195,7 +195,7 @@ def build(batch_size, data_path, num_workers):
         pin_memory=True, shuffle=True)
 
     dataset = HDF5Dataset(
-        os.path.join(data_path, DIRNAME, VAL_FILENAME),
+        os.path.join(data_path, VAL_FILENAME),
         transforms.Compose([
             # data is stored as uint8
             transforms.ToPILImage(),
