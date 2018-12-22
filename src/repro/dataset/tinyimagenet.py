@@ -57,13 +57,18 @@ def build_dataset(data_path, timeout=10 * 60):
             download(data_path)
             unzip(data_path)
             create_hdf5(data_path)
-            clean(data_path)
     except Timeout:
         print("Another process holds the lock since more than {} seconds. "
               "Will try to load the dataset.").format(timeout)
+    finally:
+        clean(data_path)
 
 
 def download(data_path):
+    if os.path.exists(zipfile_path(data_path)):
+        print("Zip file already downloaded")
+        return
+
     # download 
     url = 'http://cs231n.stanford.edu/tiny-imagenet-200.zip'
     u = urllib.request.urlopen(url)
@@ -97,12 +102,11 @@ def clean(data_path):
 
 
 def create_hdf5(data_path):
-    dirpath = os.path.join(data_path, DIRNAME)
     create_hdf5_train(
-        dirpath, os.path.join(dirpath, 'tinyimagenet_train.h5'))
+        dirpath, os.path.join(data_path, 'tinyimagenet_train.h5'))
 
     create_hdf5_val(
-        dirpath, os.path.join(dirpath, 'tinyimagenet_val.h5'))
+        dirpath, os.path.join(data_path, 'tinyimagenet_val.h5'))
 
 
 def create_train_loader(dirpath):
