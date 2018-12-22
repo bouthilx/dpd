@@ -199,3 +199,15 @@ class ResNet(nn.Module):
 #     'resnet101': [Bottleneck, [3, 4, 23, 3]],
 #     'resnet152': [Bottleneck, [3, 8, 36, 3]],
 # }
+
+
+def distribute(model, distributed):
+    if distributed > 1:
+        if distributed != torch.cuda.device_count():
+            raise RuntimeError("{} GPUs are required by the configuration but {} are currently "
+                               "made available to the process.".format(
+                                   distributed, torch.cuda.device_count()))
+
+        model = torch.nn.DataParallel(model).cuda()
+
+    return model

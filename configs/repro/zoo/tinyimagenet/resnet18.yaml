@@ -5,7 +5,7 @@ data:
 
 model:
     distributed: 1
-    name: resnet101
+    name: resnet18
     conv:
         kernel_size: 7
         stride: 2
