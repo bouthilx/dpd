@@ -6,6 +6,8 @@ import zipfile
 import shutil
 import time
 
+from filelock import FileLock, Timeout
+
 from PIL import Image
 
 import h5py
