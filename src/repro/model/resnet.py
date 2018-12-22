@@ -1,7 +1,8 @@
-import torch.nn as nn
 import math
-import torch.utils.model_zoo as model_zoo
 
+import torch
+import torch.nn as nn
+import torch.utils.model_zoo as model_zoo
 
 
 # All models here are assumed to accept RGB input, thus 3 input channels.
