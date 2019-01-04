@@ -22,16 +22,32 @@ setup(
     install_requires=[],
     extras_require = {
         'execute':  [
+            'mahler.registry.mongodb',
             'torch==1.0.0', 'torchvision', 'torchnet', 'pytorch-ignite', 'tqdm',
             'h5py==2.9.0', 'Pillow==5.3.0', 'filelock==3.0.10'],
         'configure': [
+            'mahler.registry.mongodb',
             'orion.core==db2d068',
             'orion.algo.skopt==577aabf'],
         'deploy': [
+            'mahler.registry.mongodb',
+            'mahler.scheduler.flow',
             'kleio.core==0.1.0.a',
-            'flow==6354eff']
+            'flow==6354eff'],
+        'monitor': [
+            'kleio.core==0.1.0.a',
+            'tqdm==4.28.1'
+            'numpy==1.15.4',
+            'dash==0.32.2',
+            'dash-core-components==0.41.0',
+            'dash-html-components==0.13.2',
+            'flask-caching==1.4.0'
+            ],
     },
     dependency_links=[
+        "git+https://github.com/bouthilx/mahler.git",
+        "git+https://github.com/bouthilx/mahler.registry.mongodb.git",
+        "git+https://github.com/bouthilx/mahler.scheduler.flow.git",
         "git+https://github.com/bouthilx/orion.git@db2d068#egg=orion.core-db2d068",
         "git+https://gitlab.com/bouthilx/orion.algo.skopt.git@577aabf#egg=orion.algo.skopt-577aabf",
         "git+https://github.com/epistimio/kleio.git@prototype#egg=kleio.core-0.1.0.a",
