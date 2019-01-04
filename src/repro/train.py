@@ -1,3 +1,4 @@
+from bisect import bisect_right
 import argparse
 import pprint
 import random
@@ -13,14 +14,14 @@ from kleio.core.utils import unflatten
 
 from kleio.client.logger import kleio_logger
 
-from orion.client import report_results
-
 import torch
 import torch.nn.functional as F
+import torch.optim
 
 import tqdm
 
 import yaml
+
 from repro.dataset.base import build_dataset
 from repro.model.base import build_model, load_checkpoint, save_checkpoint
 from repro.optimizer.base import build_optimizer
@@ -49,8 +50,20 @@ def update_lr(lr, optimizer, epoch):
         param_group['lr'] = new_lr
 
 
-def build_experiment(**kwargs):
+class MultiStepLR(torch.optim.lr_scheduler.MultiStepLR):
+    def __init__(self, optimizer, milestones, gamma=0.1, div_first_epoch=False, last_epoch=-1):
+        self.div_first_epoch = div_first_epoch
+        super(MultiStepLR, self).__init__(optimizer, milestones, gamma=0.1, last_epoch=-1)
 
+    def get_lr(self):
+        if self.last_epoch < 1 and self.div_first_epoch:
+            return [base_lr * self.gamma for base_lr in self.base_lrs]
+
+        return [base_lr * self.gamma ** bisect_right(self.milestones, self.last_epoch)
+                for base_lr in self.base_lrs]
+
+
+def build_config(**kwargs):
     if isinstance(kwargs['config'], str):
         with open(kwargs['config'], 'r') as f:
             config = yaml.load(f)
@@ -66,8 +79,13 @@ def build_experiment(**kwargs):
 
         update(config, kwargs['updates'])
 
-    seeds = {'model': config.get('model_seed', kwargs.get('model_seed', None)),
-             'sampler': config.get('sampler_seed', kwargs.get('sampler_seed', None))}
+    return config
+
+
+def build_experiment(**config):
+
+    seeds = {'model': config.get('model_seed'),
+             'sampler': config.get('sampler_seed')}
 
     if seeds['model'] is None:
         raise ValueError("model_seed must be defined")
@@ -104,13 +122,25 @@ def build_experiment(**kwargs):
     pprint.pprint(model)
     print("\n\n")
 
+    lr_scheduler_config = config['optimizer'].pop("lr_scheduler", None)
+
     optimizer = build_optimizer(model=model, **config['optimizer'])
+
+    if lr_scheduler_config:
+        milestones = lr_scheduler_config['milestones']
+        div_first_epoch = milestones[0]
+        milestones = milestones[1:]
+        # TODO: Adapt last_epoch if resuming
+        lr_scheduler = MultiStepLR(
+            optimizer, milestones, gamma=0.1, div_first_epoch=div_first_epoch, last_epoch=-1)
+    else:
+        lr_scheduler = None
 
     print("\n\nOptimizer\n")
     pprint.pprint(optimizer)
     print("\n\n")
 
-    return dataset, model, optimizer, device, seeds, config
+    return dataset, model, optimizer, lr_scheduler, device, seeds
 
 
 def main(argv=None):
@@ -125,13 +155,19 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
 
-    dataset, model, optimizer, device, seeds, config = build_experiment(**vars(args))
+    config = build_config(**vars(args))
+
+    train(**config)
+
+
+def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
+          compute_error_rates=('train', 'valid')):
+
+    dataset, model, optimizer, lr_scheduler, device, seeds = build_experiment(
+        data=data, model=model, optimizer=optimizer,
+        model_seed=model_seed, sampler_seed=sampler_seed)
 
     timer = Timer(average=True)
-
-    train_loader = dataset['train']
-    valid_loader = dataset['valid']
-    test_loader = dataset['test']
 
     trainer = create_supervised_trainer(
         model, optimizer, torch.nn.functional.cross_entropy, device=device)
@@ -181,8 +217,9 @@ def main(argv=None):
 
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
+        if lr_scheduler:
+            lr_scheduler.step()
         seed(seeds['sampler'] + engine.state.epoch)
-        update_lr(config['optimizer']['lr'], optimizer, engine.state.epoch)
         model.train()
 
     @trainer.on(Events.EPOCH_COMPLETED)
@@ -191,42 +228,45 @@ def main(argv=None):
             engine.pbar.close()
 
         model.eval()
-        train_metrics = evaluator.run(train_loader).metrics
-        valid_metrics = evaluator.run(valid_loader).metrics
-        test_metrics = evaluator.run(test_loader).metrics
 
-        kleio_logger.log_statistic(**{
-            'epoch': engine.state.epoch,
-            'train': dict(
-                loss=train_metrics['nll'],
-                error_rate=1. - train_metrics['accuracy']
-            ),
-            'valid': dict(
-                loss=valid_metrics['nll'],
-                error_rate=1. - valid_metrics['accuracy']
-            ),
-            'test': dict(
-                loss=test_metrics['nll'],
-                error_rate=1. - test_metrics['accuracy']
-            ),
-        })
+        stats = dict(epoch=engine.state.epoch)
+
+        for name in ['train', 'valid', 'test']:
+            if name not in compute_error_rates:
+                continue
+
+            loader = dataset[name]
+            metrics = evaluator.run(loader).metrics
+            stats[name] = dict(
+                loss=metrics['nll'],
+                error_rate=1. - metrics['accuracy'])
+
+        kleio_logger.log_statistic(**stats)
 
         print("Epoch {:>4} Iteration {:>8} Loss {:>12} Time {:>6}".format(
             engine.state.epoch, engine.state.iteration, engine.state.output, timer.value()))
         if engine.state.epoch in EPOCS_TO_SAVE:
+            # TODO: Checkpoint lr_scheduler as well
             save_checkpoint(model, optimizer, 'checkpoint',
                             epoch=engine.state.epoch,
                             iteration=engine.state.iteration)
 
     print("Training")
-    trainer.run(train_loader, max_epochs=200)
+    trainer.run(dataset['train'], max_epochs=max_epochs)
 
-    evaluator.run(valid_loader)
-    accuracy = evaluator.state.metrics['accuracy']
-    report_results([dict(
-        name="valid_error_rate",
-        type="objective",
-        value=1.0 - accuracy)])
+    stats = dict(epoch=max_epochs)
+
+    for name in ['train', 'valid', 'test']:
+        if name not in compute_error_rates:
+            continue
+
+        loader = dataset[name]
+        metrics = evaluator.run(loader).metrics
+        stats[name] = dict(
+            loss=metrics['nll'],
+            error_rate=1. - metrics['accuracy'])
+
+    return stats
 
 
 def seed(seed):
