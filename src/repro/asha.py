@@ -25,7 +25,7 @@ space['optimizer.weight_decay'] = (
 
 def convert_params(params):
     # Not samples from space but arguments of registered task, no need to convert
-    if "data" not in params:
+    if "data" in params:
         return params
 
     lr_schedule = params['optimizer']['lr_scheduler']['milestones']
