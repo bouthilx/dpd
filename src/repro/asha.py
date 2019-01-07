@@ -70,29 +70,7 @@ def load_config(config_dir_path, dataset_name, model_name):
     return config
 
 
-# TODO: Support resources properly
-#       (should submit based on largest request and enable running small tasks in large resource
-#        workers)
-#@mahler.operator(resources={'cpu':1, 'mem':'1GB'})
-@mahler.operator(resources={'cpu':4, 'gpu': 1, 'mem':'20GB'})
-def create_trial(config_dir_path, dataset_name, model_name, asha_config):
-
-    config = load_config(config_dir_path, dataset_name, model_name)
-    config['model_seed'] = random.uniform(1, 10000)
-    config['sampler_seed'] = random.uniform(1, 10000)
-
-    task = mahler.get_task()
-    tags = [tag for tag in task.tags if tag != task.name]
-    container = task.container
-
-    trials = mahler.find(tags=tags + [run.name])
-
-    asha = ASHA(space, dict(max_epochs=FIDELITY_LEVELS), **asha_config)
-    asha.observe(trials)
-
-    if asha.final_rung_is_filled():
-        return
-    
+def register_new_trial(asha, config, container, tags):
     params = asha.get_params()
     params = convert_params(params)
     # Params can be all 
@@ -118,15 +96,48 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
                 try:
                     mahler.cancel(task, 'Duplicate of task {}'.format(original.id))
                 except Exception as e:
-                    print("Warning: Could not cancel task {}, a duplicate of {}".format(
-                        task.id, original.id))
+                    message = "Could not cancel task {}, a duplicate of {}".format(
+                        task.id, original.id)
+                    raise RuntimeError(message) from e
             else:
                 original = task
+
+    return trial_task
+
+
+# TODO: Support resources properly
+#       (should submit based on largest request and enable running small tasks in large resource
+#        workers)
+#@mahler.operator(resources={'cpu':1, 'mem':'1GB'})
+@mahler.operator(resources={'cpu':4, 'gpu': 1, 'mem':'20GB'})
+def create_trial(config_dir_path, dataset_name, model_name, asha_config):
+
+    config = load_config(config_dir_path, dataset_name, model_name)
+    config['model_seed'] = random.uniform(1, 10000)
+    config['sampler_seed'] = random.uniform(1, 10000)
+
+    task = mahler.get_task()
+    tags = [tag for tag in task.tags if tag != task.name]
+    container = task.container
+
+    trials = mahler.find(tags=tags + [run.name])
+
+    asha = ASHA(space, dict(max_epochs=FIDELITY_LEVELS), **asha_config)
+    asha.observe(trials)
+
+    if asha.final_rung_is_filled():
+        return
+
+    trial_task_ids = []
+    for i in range(5):
+        trial_task = register_new_trial(asha, config, container, tags)
+        asha.observe([trial_task])
+        trial_task_ids.append(str(trial_task.id))
 
     create_task = mahler.register(
         create_trial.delay(config_dir_path=config_dir_path, dataset_name=dataset_name,
                            model_name=model_name, asha_config=asha_config),
         container=container, tags=tags)
 
-    return dict(trial_task_id=str(trial_task.id),
+    return dict(trial_task_ids=trial_task_ids,
                 create_trial_task_id=str(create_task.id))

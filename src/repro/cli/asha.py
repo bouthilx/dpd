@@ -35,13 +35,13 @@ def main(argv=None):
         print('HPO already registered')
         return
 
-    for i in range(options.num_workers):
-        mahler.register(
-            create_trial.delay(
-                config_dir_path=options.config_dir_path, dataset_name='mnist', model_name='lenet',
-                asha_config=dict(reduction_factor=options.reduction_factor,
-                                 max_resource=options.max_resource)),
-            container=options.container, tags=options.tags)
+    # for i in range(options.num_workers):
+    mahler.register(
+        create_trial.delay(
+            config_dir_path=options.config_dir_path, dataset_name='mnist', model_name='lenet',
+            asha_config=dict(reduction_factor=options.reduction_factor,
+                             max_resource=options.max_resource)),
+        container=options.container, tags=options.tags)
 
 
 if __name__ == "__main__":
