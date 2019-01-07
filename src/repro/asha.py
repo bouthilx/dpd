@@ -129,7 +129,7 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
         return
 
     trial_task_ids = []
-    for i in range(5):
+    for i in range(20):
         trial_task = register_new_trial(asha, config, container, tags)
         asha.observe([trial_task])
         trial_task_ids.append(str(trial_task.id))
