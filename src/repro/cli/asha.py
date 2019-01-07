@@ -5,6 +5,8 @@ from repro.asha import run, create_trial, mahler
 # NOTE: Default path when running in the container
 DEFAULT_CONFIG_DIR_PATH = '/repos/repro/configs/repro/zoo/'
 
+DATASET_NAMES = ['mnist', 'fashionmnist', 'svhn', 'cifar10', 'cifar100', 'emnist', 'tinyimagenet']
+
 
 def main(argv=None):
     # NOTE: When implementing full pipeline, config will become dynamic and change based on which
@@ -36,12 +38,14 @@ def main(argv=None):
         return
 
     # for i in range(options.num_workers):
-    mahler.register(
-        create_trial.delay(
-            config_dir_path=options.config_dir_path, dataset_name='mnist', model_name='lenet',
-            asha_config=dict(reduction_factor=options.reduction_factor,
-                             max_resource=options.max_resource)),
-        container=options.container, tags=options.tags)
+    for dataset_name in DATASET_NAMES:
+        mahler.register(
+            create_trial.delay(
+                config_dir_path=options.config_dir_path, dataset_name=dataset_name,
+                model_name='lenet',
+                asha_config=dict(reduction_factor=options.reduction_factor,
+                                 max_resource=options.max_resource)),
+            container=options.container, tags=options.tags + [dataset_name, 'lenet', 'repro'])
 
 
 if __name__ == "__main__":
