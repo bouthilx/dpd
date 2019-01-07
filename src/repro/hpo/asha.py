@@ -53,7 +53,7 @@ class ASHA(object):
         # completed_trials = trials
 
         def key(trial):
-            return trial.output['valid']['error_rate']
+            return trial.output['last']['valid']['error_rate']
 
         return [trial for i, trial in enumerate(sorted(completed_trials, key=key)) if i < k]
 
@@ -131,7 +131,9 @@ def test():
             if asha.final_rung_is_filled():
                 break
             params = asha.get_params()
-            task = Task(arguments=params, output=dict(valid=dict(error_rate=random.uniform(0, 1))))
+            task = Task(
+                arguments=params,
+                output=dict(last=dict(valid=dict(error_rate=random.uniform(0, 1)))))
             tasks.append(task)
             asha.observe([task])
 
