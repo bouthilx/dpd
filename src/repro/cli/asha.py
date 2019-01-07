@@ -26,6 +26,8 @@ def main(argv=None):
     parser.add_argument(
         '--container', help='Container to execute HPO')
     parser.add_argument(
+        '--datasets', default=DATASET_NAMES, type=str, nargs='*', help='Dataset to run')
+    parser.add_argument(
         '--config-dir-path',
         default=DEFAULT_CONFIG_DIR_PATH,
         help=('Path of directory containing the configurations of the datasets and models. '
@@ -33,19 +35,23 @@ def main(argv=None):
 
     options = parser.parse_args(argv)
 
-    if any(True for _ in mahler.find(tags=options.tags + [run.name])):
-        print('HPO already registered')
-        return
-
     # for i in range(options.num_workers):
-    for dataset_name in DATASET_NAMES:
+    for dataset_name in options.datasets:
+        tags = options.tags + [dataset_name, 'lenet', 'repro']
+
+        if any(True for _ in mahler.find(tags=tags + [run.name])):
+            print('HPO already registered for tags: {}'.format(", ".join(tags)))
+            continue
+
+        print("Registering {} with tags: {}".format(create_trial.name, ", ".join(tags)))
+
         mahler.register(
             create_trial.delay(
                 config_dir_path=options.config_dir_path, dataset_name=dataset_name,
                 model_name='lenet',
                 asha_config=dict(reduction_factor=options.reduction_factor,
                                  max_resource=options.max_resource)),
-            container=options.container, tags=options.tags + [dataset_name, 'lenet', 'repro'])
+            container=options.container, tags=tags)
 
 
 if __name__ == "__main__":
