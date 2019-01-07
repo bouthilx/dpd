@@ -31,7 +31,7 @@ def main(argv=None):
 
     options = parser.parse_args(argv)
 
-    if any(True for _ in mahler.find(options.tags + [run.name])):
+    if any(True for _ in mahler.find(tags=options.tags + [run.name])):
         print('HPO already registered')
         return
 
