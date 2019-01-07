@@ -257,7 +257,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
     print("Training")
     trainer.run(dataset['train'], max_epochs=max_epochs)
 
-    return all_stats
+    return {'last': all_stats[-1], 'all': tuple(all_stats)}
 
 
 def seed(seed):
