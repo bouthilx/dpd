@@ -178,6 +178,8 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
 
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
 
+    all_stats = []
+
     @evaluator.on(Events.STARTED)
     def start_iterator(engine):
         if kleio_logger.trial is None:
@@ -242,6 +244,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
                 error_rate=1. - metrics['accuracy'])
 
         kleio_logger.log_statistic(**stats)
+        all_stats.append(stats)
 
         print("Epoch {:>4} Iteration {:>8} Loss {:>12} Time {:>6}".format(
             engine.state.epoch, engine.state.iteration, engine.state.output, timer.value()))
@@ -254,19 +257,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
     print("Training")
     trainer.run(dataset['train'], max_epochs=max_epochs)
 
-    stats = dict(epoch=max_epochs)
-
-    for name in ['train', 'valid', 'test']:
-        if name not in compute_error_rates:
-            continue
-
-        loader = dataset[name]
-        metrics = evaluator.run(loader).metrics
-        stats[name] = dict(
-            loss=metrics['nll'],
-            error_rate=1. - metrics['accuracy'])
-
-    return stats
+    return all_stats
 
 
 def seed(seed):
