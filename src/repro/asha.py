@@ -100,7 +100,29 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     flattened_config.update(flatten(params))
     config = unflatten(flattened_config)
 
+    # number of tasks
+    number_of_tasks = sum(len(rung) for rung in asha.rungs.values())
+
     trial_task = mahler.register(run.delay(**config), container=container, tags=tags)
+
+    number_of_duplicates = 0
+    original = None
+    for task in mahler.find(tags=tags + [run.name]):
+        if task.arguments[asha.fidelity_dim] != params[asha.fidelity_dim]:
+            continue
+
+        if asha._fetch_trial_params(task) == asha._fetch_trial_params(trial_task):
+            number_of_duplicates += 1
+
+            if number_of_duplicates > 1:
+                try:
+                    mahler.cancel(task, 'Duplicate of task {}'.format(original.id))
+                except Exception as e:
+                    print("Warning: Could not cancel task {}, a duplicate of {}".format(
+                        task.id, original.id))
+            else:
+                original = task
+
     create_task = mahler.register(
         create_trial.delay(config_dir_path=config_dir_path, dataset_name=dataset_name,
                            model_name=model_name, asha_config=asha_config),
