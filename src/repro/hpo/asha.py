@@ -18,14 +18,6 @@ logger = logging.getLogger(__name__)
 # mahler.find(tags, status=None)
 
 
-def build_rung(trials):
-    rung = {}
-    for trial in trials:
-        rung[trial.arguments['rung']] = trial
-
-    return rung
-
-
 class ASHA(object):
     def __init__(self, space, fidelity_space, reduction_factor, max_resource):
 
@@ -35,10 +27,12 @@ class ASHA(object):
         self.max_resource = max_resource
         self.reduction_factor = reduction_factor
         self.base = len(self.fidelity_levels) - 1
-        print(self.base)
+
+    def reset(self):
+        self.rungs = defaultdict(list)
 
     def _fetch_rung_id(self, trial):
-        return self.fidelity_levels.index(trial.arguments[self.fidelity_dim])
+        return self.fidelity_levels.index(trial['arguments'][self.fidelity_dim])
 
     def observe(self, trials):
         for trial in trials:
@@ -49,31 +43,40 @@ class ASHA(object):
 
     def _top_k(self, trials, k):
         completed_trials = (trial for trial in trials
-                            if isinstance(trial.status, mahler.core.status.Completed))
+                            if trial['registry']['status'] == 'Completed')
         # completed_trials = trials
 
         def key(trial):
-            return trial.output['last']['valid']['error_rate']
+            return trial['output']['last']['valid']['error_rate']
 
         return [trial for i, trial in enumerate(sorted(completed_trials, key=key)) if i < k]
 
-    def _fetch_trial_params(self, trial):
-        flattened_arguments = flatten(trial.arguments)
+    def _fetch_trial_params(self, arguments):
+        flattened_arguments = flatten(arguments)
         return unflatten(dict((key, flattened_arguments[key]) for key in self.space.keys()))
 
     def get_params(self):
+        """
+
+        Notes
+        -----
+            All trials are part of the rungs, for any state. Only completed trials
+            are eligible for promotion, i.e., only completed trials can be part of top-k.
+            Lookup for promotion in rung l + 1 contains trials of any status.
+        """
         # NOTE: There should be base + 1 rungs
         for k in range(self.base - 1, -1, -1):
             rungs_k = self.rungs.get(k, [])
             candidates = self._top_k(rungs_k, k=len(rungs_k) // self.reduction_factor)
 
             # Compare based on arguments
-            rungs_kp1 = [self._fetch_trial_params(trial) for trial in self.rungs.get(k + 1, [])]
+            rungs_kp1 = [self._fetch_trial_params(trial['arguments'])
+                         for trial in self.rungs.get(k + 1, [])]
             candidates = [candidate for candidate in candidates
-                          if self._fetch_trial_params(candidate) not in rungs_kp1]
+                          if self._fetch_trial_params(candidate['arguments']) not in rungs_kp1]
 
             if candidates:
-                arguments = self._fetch_trial_params(candidates[0])
+                arguments = self._fetch_trial_params(candidates[0]['arguments'])
                 arguments[self.fidelity_dim] = self.fidelity_levels[k + 1]
                 logger.info(
                     'Promoting to {}:\n{}'.format(

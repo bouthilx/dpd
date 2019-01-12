@@ -1,7 +1,10 @@
+from collections import defaultdict
+import logging
 import os
+import pprint
 import random
 
-from mahler.client import Client
+import mahler.client as mahler
 from mahler.core.utils.flatten import flatten, unflatten
 
 from orion.core.io.space_builder import Space, DimensionBuilder
@@ -12,15 +15,8 @@ from repro.train import train
 from repro.hpo.asha import ASHA
 
 
-space = Space()
-space['optimizer.lr'] = (
-    DimensionBuilder().build('optimizer.lr', 'loguniform(1e-5, 0.5)'))
-space['optimizer.lr_scheduler.milestones'] = (
-    DimensionBuilder().build('optimizer.lr_scheduler.milestones', 'uniform(0, 1, shape=(4, ))'))
-space['optimizer.momentum'] = (
-    DimensionBuilder().build('optimizer.momentum', 'uniform(0., 0.9)'))
-space['optimizer.weight_decay'] = (
-    DimensionBuilder().build('optimizer.weight_decay', 'loguniform(1e-8, 1e-3)'))
+logger = logging.getLogger(__name__)
+
 
 
 def convert_params(params):
@@ -45,7 +41,6 @@ FIDELITY_LEVELS = [
     100,
     200]
 
-mahler = Client()
 
 run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20BG'}, resumable=True)(train)
 
@@ -58,9 +53,6 @@ run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20BG'}, resumable=T
 
 def load_config(config_dir_path, dataset_name, model_name):
 
-    print(config_dir_path)
-    print(dataset_name, model_name)
-    print(os.path.join(config_dir_path, "{dataset}/{model}.yaml"))
     config_path = os.path.join(config_dir_path, "{dataset}/{model}.yaml").format(
         dataset=dataset_name, model=model_name)
 
@@ -70,39 +62,48 @@ def load_config(config_dir_path, dataset_name, model_name):
     return config
 
 
-def register_new_trial(asha, config, container, tags):
+def sample_new_config(asha, config):
     params = asha.get_params()
     params = convert_params(params)
     # Params can be all 
     flattened_config = flatten(config)
     flattened_config.update(flatten(params))
-    config = unflatten(flattened_config)
 
-    # number of tasks
-    number_of_tasks = sum(len(rung) for rung in asha.rungs.values())
+    return unflatten(flattened_config)
 
-    trial_task = mahler.register(run.delay(**config), container=container, tags=tags)
 
+def clean_duplicates(mahler_client, asha, new_tasks, tags):
     number_of_duplicates = 0
-    original = None
-    for task in mahler.find(tags=tags + [run.name]):
-        if task.arguments[asha.fidelity_dim] != params[asha.fidelity_dim]:
-            continue
+    number_of_duplicates = defaultdict(int)
+    originals = dict()
+    # TODO: Fetch documents rather than tasks, and use projection to just get the arguments
+    #       This is all we need here.
+    for task_document in mahler_client.find(tags=tags + [run.name], _return_doc=True,
+                                            _projection={'arguments': 1, 'registry.status': 1}):
+        task_arguments = task_document['arguments']
+        task_id = task_document['id']
 
-        if asha._fetch_trial_params(task) == asha._fetch_trial_params(trial_task):
-            number_of_duplicates += 1
+        for new_task in new_tasks:
+            new_arguments = new_task.arguments
+            new_id = new_task.id
 
-            if number_of_duplicates > 1:
-                try:
-                    mahler.cancel(task, 'Duplicate of task {}'.format(original.id))
-                except Exception as e:
-                    message = "Could not cancel task {}, a duplicate of {}".format(
-                        task.id, original.id)
-                    raise RuntimeError(message) from e
-            else:
-                original = task
+            if task_arguments[asha.fidelity_dim] != new_arguments[asha.fidelity_dim]:
+                continue
 
-    return trial_task
+            if asha._fetch_trial_params(task_arguments) == asha._fetch_trial_params(new_arguments):
+                number_of_duplicates[new_id] += 1
+
+                if (number_of_duplicates[new_id] > 1 and
+                        task_document['registry']['status'] != 'Cancelled'):
+                    try:
+                        message = 'Duplicate of task {}'.format(originals[new_id]['id'])
+                        mahler_client.cancel(task_id, message)
+                    except Exception as e:
+                        message = "Could not cancel task {}, a duplicate of {}".format(
+                            task_id, originals[new_id]['id'])
+                        logger.error(message)
+                else:
+                    originals[new_id] = task_document
 
 
 # TODO: Support resources properly
@@ -112,32 +113,60 @@ def register_new_trial(asha, config, container, tags):
 @mahler.operator(resources={'cpu':4, 'gpu': 1, 'mem':'20GB'})
 def create_trial(config_dir_path, dataset_name, model_name, asha_config):
 
+    # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
+    mahler_client = mahler.Client()
+
     config = load_config(config_dir_path, dataset_name, model_name)
     config['model_seed'] = random.uniform(1, 10000)
     config['sampler_seed'] = random.uniform(1, 10000)
 
-    task = mahler.get_task()
+    # TODO: Will this work in multiprocessing? Maybe the Dispatcher will be a different object 
+    #       because it is a different process.
+    task = mahler_client.get_current_task()
     tags = [tag for tag in task.tags if tag != task.name]
     container = task.container
 
-    trials = mahler.find(tags=tags + [run.name])
+    projection = {'output': 1, 'arguments': 1, 'registry.status': 1}
+    trials = mahler_client.find(tags=tags + [run.name], _return_doc=True, _projection=projection)
+
+    # *IMPORTANT* NOTE: 
+    #     Space must be instantiated in the function otherwise its internal RNG state gets copied
+    #     every time a task is forked in a process and each of them will start with the exact
+    #     same state, leading to identical sampling. What a naughty side effect!
+    space = Space()
+    space['optimizer.lr'] = (
+        DimensionBuilder().build('optimizer.lr', 'loguniform(1e-5, 0.5)'))
+    space['optimizer.lr_scheduler.milestones'] = (
+        DimensionBuilder().build('optimizer.lr_scheduler.milestones', 'uniform(0, 1, shape=(4, ))'))
+    space['optimizer.momentum'] = (
+        DimensionBuilder().build('optimizer.momentum', 'uniform(0., 0.9)'))
+    space['optimizer.weight_decay'] = (
+        DimensionBuilder().build('optimizer.weight_decay', 'loguniform(1e-8, 1e-3)'))
 
     asha = ASHA(space, dict(max_epochs=FIDELITY_LEVELS), **asha_config)
-    asha.observe(trials)
+    for trial in trials:
+        # pprint.pprint(trial)
+        if trial['registry']['status'] != 'Cancelled':
+            asha.observe(trials)
 
     if asha.final_rung_is_filled():
         return
 
-    trial_task_ids = []
-    for i in range(20):
-        trial_task = register_new_trial(asha, config, container, tags)
-        asha.observe([trial_task])
-        trial_task_ids.append(str(trial_task.id))
+    new_trial_tasks = []
+    for i in range(2):  # 20):
+        new_task_config = sample_new_config(asha, config)
+        trial_task = mahler_client.register(run.delay(**new_task_config),
+                                            container=container, tags=tags)
+        # pprint.pprint(trial_task.to_dict(report=True))
+        asha.observe([trial_task.to_dict(report=True)])
+        new_trial_tasks.append(trial_task)
 
-    create_task = mahler.register(
+    clean_duplicates(mahler_client, asha, new_trial_tasks, tags)
+
+    create_task = mahler_client.register(
         create_trial.delay(config_dir_path=config_dir_path, dataset_name=dataset_name,
                            model_name=model_name, asha_config=asha_config),
         container=container, tags=tags)
 
-    return dict(trial_task_ids=trial_task_ids,
+    return dict(trial_task_ids=[str(new_trial_task.id) for new_trial_task in new_trial_tasks],
                 create_trial_task_id=str(create_task.id))

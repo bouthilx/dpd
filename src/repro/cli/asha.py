@@ -1,6 +1,9 @@
 import argparse
 
-from repro.asha import run, create_trial, mahler
+import mahler.client as mahler
+
+from repro.asha import run, create_trial
+
 
 # NOTE: Default path when running in the container
 DEFAULT_CONFIG_DIR_PATH = '/repos/repro/configs/repro/zoo/'
@@ -35,17 +38,19 @@ def main(argv=None):
 
     options = parser.parse_args(argv)
 
+    mahler_client = mahler.Client()
+
     # for i in range(options.num_workers):
     for dataset_name in options.datasets:
         tags = options.tags + [dataset_name, 'lenet', 'repro']
 
-        if any(True for _ in mahler.find(tags=tags + [run.name])):
+        if any(True for _ in mahler_client.find(tags=tags + [run.name])):
             print('HPO already registered for tags: {}'.format(", ".join(tags)))
             continue
 
         print("Registering {} with tags: {}".format(create_trial.name, ", ".join(tags)))
 
-        mahler.register(
+        mahler_client.register(
             create_trial.delay(
                 config_dir_path=options.config_dir_path, dataset_name=dataset_name,
                 model_name='lenet',
