@@ -116,12 +116,9 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
     mahler_client = mahler.Client()
 
-    config = load_config(config_dir_path, dataset_name, model_name)
-    config['model_seed'] = random.uniform(1, 10000)
-    config['sampler_seed'] = random.uniform(1, 10000)
-
     # TODO: Will this work in multiprocessing? Maybe the Dispatcher will be a different object 
     #       because it is a different process.
+    # NOTE: It seems to...
     task = mahler_client.get_current_task()
     tags = [tag for tag in task.tags if tag != task.name]
     container = task.container
@@ -143,6 +140,8 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     space['optimizer.weight_decay'] = (
         DimensionBuilder().build('optimizer.weight_decay', 'loguniform(1e-8, 1e-3)'))
 
+    config = load_config(config_dir_path, dataset_name, model_name)
+
     asha = ASHA(space, dict(max_epochs=FIDELITY_LEVELS), **asha_config)
     for trial in trials:
         # pprint.pprint(trial)
@@ -155,6 +154,8 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     new_trial_tasks = []
     for i in range(2):  # 20):
         new_task_config = sample_new_config(asha, config)
+        new_task_config['model_seed'] = random.uniform(1, 10000)
+        new_task_config['sampler_seed'] = random.uniform(1, 10000)
         trial_task = mahler_client.register(run.delay(**new_task_config),
                                             container=container, tags=tags)
         # pprint.pprint(trial_task.to_dict(report=True))
