@@ -83,7 +83,8 @@ class ASHA(object):
                         k + 1, pprint.pformat(arguments)))
                 return arguments
 
-        arguments = unflatten(dict(zip(self.space.keys(), self.space.sample()[0])))
+        randomseed = random.randint(0, 100000)
+        arguments = unflatten(dict(zip(self.space.keys(), self.space.sample(seed=randomseed)[0])))
         arguments[self.fidelity_dim] = self.fidelity_levels[0]
         logger.info('Sampling:\n{}'.format(pprint.pformat(arguments)))
         return arguments
