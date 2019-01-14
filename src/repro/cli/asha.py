@@ -10,12 +10,12 @@ DEFAULT_CONFIG_DIR_PATH = '/repos/repro/configs/repro/zoo/'
 
 DATASET_NAMES = ['mnist', 'fashionmnist', 'svhn', 'cifar10', 'cifar100', 'emnist', 'tinyimagenet']
 
-MODEL_NAMES = [
+MODEL_NAMES = (
     ['lenet', 'mobilenet', 'mobilenetv2'] + 
     ['vgg{}'.format(i) for i in [11, 13, 16, 19]] + 
     ['densenet{}'.format(i) for i in [121, 161, 169, 201]] + 
     ['resnet{}'.format(i) for i in [18, 34, 50, 101]] + 
-    ['preactresnet{}'.format(i) for i in [18, 34, 50, 101]]]
+    ['preactresnet{}'.format(i) for i in [18, 34, 50, 101]])
 
 
 def main(argv=None):
@@ -36,10 +36,10 @@ def main(argv=None):
     parser.add_argument(
         '--container', help='Container to execute HPO')
     parser.add_argument(
-        '--datasets', default=DATASET_NAMES, choices=DATASET_NAMES, type=str, nargs='*',
+        '--datasets', default=tuple(), choices=DATASET_NAMES, type=str, nargs='*',
         help='Dataset to run')
     parser.add_argument(
-        '--models', default=MODEL_NAMES, choices=MODEL_NAMES, type=str, nargs='*',
+        '--models', default=tuple(), choices=MODEL_NAMES, type=str, nargs='*',
         help='Models to run')
     parser.add_argument(
         '--config-dir-path',
@@ -53,7 +53,7 @@ def main(argv=None):
 
     # for i in range(options.num_workers):
     for dataset_name in options.datasets:
-        for model_name in options.model_names:
+        for model_name in options.models:
             tags = options.tags + [dataset_name, model_name, 'repro']
 
             if any(True for _ in mahler_client.find(tags=tags + [run.name])):
