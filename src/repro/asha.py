@@ -1,4 +1,5 @@
 from collections import defaultdict
+import copy
 import logging
 import os
 import pprint
@@ -62,16 +63,6 @@ def load_config(config_dir_path, dataset_name, model_name):
     return config
 
 
-def sample_new_config(asha, config):
-    params = asha.get_params()
-    params = convert_params(params)
-    # Params can be all 
-    flattened_config = flatten(config)
-    flattened_config.update(flatten(params))
-
-    return unflatten(flattened_config)
-
-
 def clean_duplicates(mahler_client, asha, new_tasks, tags):
     number_of_duplicates = 0
     number_of_duplicates = defaultdict(int)
@@ -106,6 +97,86 @@ def clean_duplicates(mahler_client, asha, new_tasks, tags):
                     originals[new_id] = task_document
 
 
+def compute_args(trials, space):
+    min_objective = float('inf')
+    max_objective = -float('inf')
+    min_args = None
+    max_args = None
+    mean_args = dict()
+    for trial in trials:
+        objective = trial['output']['last']['valid']['error_rate']
+        if min_objective > objective:
+            min_objective = objective
+            min_args = trial['arguments']
+
+        if max_objective < objective:
+            max_objective = objective
+            max_args = trial['arguments']
+
+        flattened_arguments = flatten(trial['arguments'])
+        for key in space.keys():
+            item = flattened_arguments[key]
+            if key.endswith('milestones'):
+                mean_args[key] = [item[i] + mean_args[key][i]
+                                  if key in mean_args
+                                  else item[i]
+                                  for i in range(len(item))]
+            else:
+                mean_args[key] = item + mean_args.get(key, 0)
+
+    for key, item in mean_args.items():
+        if key.endswith('milestones'):
+            mean_args[key] = [int(item_i / len(trials)) for item_i in mean_args[key]]
+        else:
+            mean_args[key] = item / len(trials)
+
+    return min_args, max_args, mean_args
+
+
+def register_best_trials(mahler_client, asha, tags, container):
+
+    min_args, max_args, mean_args = compute_args(asha.rungs[len(FIDELITY_LEVELS) - 1], asha.space)
+
+    # Use first trial in last rung, we don't care since they all have the same arguments
+    # except for the optimizer HPs.
+    config = asha.rungs[len(FIDELITY_LEVELS) - 1][0]['arguments']
+
+    min_config = merge(config, min_args)
+    max_config = merge(config, max_args)
+    mean_config = merge(config, mean_args)
+
+    new_trial_ids = defaultdict(list)
+    for i in range(20):
+        new_trial_ids['min'].append(
+            register_new_trial(mahler_client, min_config, tags + ['distrib', 'min'], container).id)
+        new_trial_ids['max'].append(
+            register_new_trial(mahler_client, max_config, tags + ['distrib', 'max'], container).id)
+        new_trial_ids['mean'].append(
+            register_new_trial(mahler_client, mean_config, tags + ['distrib', 'mean'], container).id)
+
+    return new_trial_ids
+
+
+def merge(config, subconfig):
+    flattened_config = copy.deepcopy(flatten(config))
+    flattened_config.update(flatten(subconfig))
+    return unflatten(flattened_config)
+    
+
+def register_new_trial(mahler_client, config, tags, container):
+    config = copy.deepcopy(config)
+    config['model_seed'] = random.uniform(1, 10000)
+    config['sampler_seed'] = random.uniform(1, 10000)
+    return mahler_client.register(run.delay(**config), container=container, tags=tags)
+
+
+def sample_new_config(asha, config):
+    params = asha.get_params()
+    params = convert_params(params)
+    # Params can be all 
+    return merge(config, params)
+
+
 # TODO: Support resources properly
 #       (should submit based on largest request and enable running small tasks in large resource
 #        workers)
@@ -124,7 +195,7 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     container = task.container
 
     projection = {'output': 1, 'arguments': 1, 'registry.status': 1}
-    trials = mahler_client.find(tags=tags + [run.name], _return_doc=True, _projection=projection)
+    trials = mahler_client.find(tags=tags + ['asha', run.name], _return_doc=True, _projection=projection)
 
     # *IMPORTANT* NOTE: 
     #     Space must be instantiated in the function otherwise its internal RNG state gets copied
@@ -146,18 +217,15 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     for trial in trials:
         # pprint.pprint(trial)
         if trial['registry']['status'] != 'Cancelled':
-            asha.observe(trials)
+            asha.observe(trial)
 
     if asha.final_rung_is_filled():
-        return
+        return register_best_trials(mahler_client, asha, tags, container)
 
     new_trial_tasks = []
     for i in range(2):  # 20):
         new_task_config = sample_new_config(asha, config)
-        new_task_config['model_seed'] = random.uniform(1, 10000)
-        new_task_config['sampler_seed'] = random.uniform(1, 10000)
-        trial_task = mahler_client.register(run.delay(**new_task_config),
-                                            container=container, tags=tags)
+        trial_task = register_new_trial(mahler_client, new_task_config, tags + ['asha'], container)
         # pprint.pprint(trial_task.to_dict(report=True))
         asha.observe([trial_task.to_dict(report=True)])
         new_trial_tasks.append(trial_task)
