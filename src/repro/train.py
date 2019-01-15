@@ -1,4 +1,5 @@
 from bisect import bisect_right
+from datetime import datetime
 import argparse
 import pprint
 import random
@@ -27,6 +28,7 @@ from repro.model.base import build_model, load_checkpoint, save_checkpoint
 from repro.optimizer.base import build_optimizer
 
 
+TIME_BUFFER = 60 * 5  # 5 minutes
 
 
 def update(config, arguments):
@@ -223,12 +225,14 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
             engine.state.epoch, engine.state.iteration, engine.state.output, timer.value()))
 
         # TODO: Checkpoint lr_scheduler as well
-        print('Checkpointing epoch {}'.format(engine.state.epoch))
-        save_checkpoint(mahler_client,
-                        model, optimizer, lr_scheduler,
-                        epoch=engine.state.epoch,
-                        iteration=engine.state.iteration,
-                        all_stats=all_stats)
+        if (datetime.utcnow() - engine.state.last_checkpoint).total_seconds() > TIME_BUFFER:
+            print('Checkpointing epoch {}'.format(engine.state.epoch))
+            save_checkpoint(mahler_client,
+                            model, optimizer, lr_scheduler,
+                            epoch=engine.state.epoch,
+                            iteration=engine.state.iteration,
+                            all_stats=all_stats)
+            engine.state.last_checkpoint = datetime.utcnow()
 
     print("Training")
     trainer.run(dataset['train'], max_epochs=max_epochs)
