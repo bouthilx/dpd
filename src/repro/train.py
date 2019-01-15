@@ -12,7 +12,7 @@ from ignite.metrics import Accuracy, Loss
 from kleio.core.io.resolve_config import merge_configs
 from kleio.core.utils import unflatten
 
-from kleio.client.logger import kleio_logger
+import mahler.client as mahler
 
 import torch
 import torch.nn.functional as F
@@ -27,7 +27,6 @@ from repro.model.base import build_model, load_checkpoint, save_checkpoint
 from repro.optimizer.base import build_optimizer
 
 
-EPOCS_TO_SAVE = list(range(25, 200, 25))
 
 
 def update(config, arguments):
@@ -64,20 +63,16 @@ class MultiStepLR(torch.optim.lr_scheduler.MultiStepLR):
 
 
 def build_config(**kwargs):
-    if isinstance(kwargs['config'], str):
-        with open(kwargs['config'], 'r') as f:
-            config = yaml.load(f)
-    else:
-        config = kwargs['config']['content']
-
-    if 'update' in kwargs:
-        kwargs['updates'] = kwargs['update']
+    with open(kwargs.pop('config'), 'r') as f:
+        config = yaml.load(f)
 
     if 'updates' in kwargs:
         if isinstance(kwargs['updates'], str):
             kwargs['updates'] = [kwargs['updates']]
 
-        update(config, kwargs['updates'])
+        update(config, kwargs.pop('updates'))
+
+    config.update(kwargs)
 
     return config
 
@@ -163,6 +158,9 @@ def main(argv=None):
 def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
           compute_error_rates=('train', 'valid')):
 
+    # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
+    mahler_client = mahler.Client()
+
     dataset, model, optimizer, lr_scheduler, device, seeds = build_experiment(
         data=data, model=model, optimizer=optimizer,
         model_seed=model_seed, sampler_seed=sampler_seed)
@@ -180,37 +178,16 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
 
     all_stats = []
 
-    @evaluator.on(Events.STARTED)
-    def start_iterator(engine):
-        if kleio_logger.trial is None:
-            engine.pbar = tqdm.tqdm(total=len(engine.state.dataloader), leave=False, desc='Evaluation')
-
-    @evaluator.on(Events.ITERATION_COMPLETED)
-    def start_iterator(engine):
-        if hasattr(engine, 'pbar'):
-            engine.pbar.update()
-
-    @evaluator.on(Events.COMPLETED)
-    def start_iterator(engine):
-        if hasattr(engine, 'pbar'):
-            engine.pbar.close()
-
-    @trainer.on(Events.EPOCH_STARTED)
-    def start_iterator(engine):
-        if kleio_logger.trial is None:
-            engine.pbar = tqdm.tqdm(total=len(engine.state.dataloader), leave=False, desc='Training')
-
-    @trainer.on(Events.ITERATION_COMPLETED)
-    def start_iterator(engine):
-        if hasattr(engine, 'pbar'):
-            engine.pbar.update()
-
     @trainer.on(Events.STARTED)
     def trainer_load_checkpoint(engine):
-        metadata = load_checkpoint(model, optimizer, 'checkpoint')
+        engine.state.last_checkpoint = datetime.utcnow()
+        metadata = load_checkpoint(mahler_client, model, optimizer, lr_scheduler)
         if metadata:
+            print('Resuming from epoch {}'.format(metadata['epoch']))
             engine.state.epoch = metadata['epoch']
             engine.state.iteration = metadata['iteration']
+            for epoch_stats in metadata['all_stats']:
+                all_stats.append(epoch_stats)
         else:
             engine.state.epoch = 0
             engine.state.iteration = 0
@@ -226,9 +203,6 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def trainer_save_checkpoint(engine):
-        if hasattr(engine, 'pbar'):
-            engine.pbar.close()
-
         model.eval()
 
         stats = dict(epoch=engine.state.epoch)
@@ -243,19 +217,24 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
                 loss=metrics['nll'],
                 error_rate=1. - metrics['accuracy'])
 
-        kleio_logger.log_statistic(**stats)
         all_stats.append(stats)
 
         print("Epoch {:>4} Iteration {:>8} Loss {:>12} Time {:>6}".format(
             engine.state.epoch, engine.state.iteration, engine.state.output, timer.value()))
-        if engine.state.epoch in EPOCS_TO_SAVE:
-            # TODO: Checkpoint lr_scheduler as well
-            save_checkpoint(model, optimizer, 'checkpoint',
-                            epoch=engine.state.epoch,
-                            iteration=engine.state.iteration)
+
+        # TODO: Checkpoint lr_scheduler as well
+        print('Checkpointing epoch {}'.format(engine.state.epoch))
+        save_checkpoint(mahler_client,
+                        model, optimizer, lr_scheduler,
+                        epoch=engine.state.epoch,
+                        iteration=engine.state.iteration,
+                        all_stats=all_stats)
 
     print("Training")
     trainer.run(dataset['train'], max_epochs=max_epochs)
+
+    # Remove checkpoint to avoid cluttering the FS.
+    clear_checkpoint(mahler_client)
 
     return {'last': all_stats[-1], 'all': tuple(all_stats)}
 
