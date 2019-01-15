@@ -215,9 +215,8 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
 
     asha = ASHA(space, dict(max_epochs=FIDELITY_LEVELS), **asha_config)
     for trial in trials:
-        # pprint.pprint(trial)
         if trial['registry']['status'] != 'Cancelled':
-            asha.observe(trial)
+            asha.observe([trial])
 
     if asha.final_rung_is_filled():
         return register_best_trials(mahler_client, asha, tags, container)
