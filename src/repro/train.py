@@ -24,7 +24,7 @@ import tqdm
 import yaml
 
 from repro.dataset.base import build_dataset
-from repro.model.base import build_model, load_checkpoint, save_checkpoint
+from repro.model.base import build_model, load_checkpoint, save_checkpoint, clear_checkpoint
 from repro.optimizer.base import build_optimizer
 
 
