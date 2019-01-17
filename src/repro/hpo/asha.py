@@ -47,7 +47,11 @@ class ASHA(object):
         # completed_trials = trials
 
         def key(trial):
-            return trial['output']['last']['valid']['error_rate']
+            try:
+                error_rate = trial['output']['last']['valid']['error_rate']
+            except KeyError:
+                pprint.pprint(trial)
+                raise
 
         return [trial for i, trial in enumerate(sorted(completed_trials, key=key)) if i < k]
 
