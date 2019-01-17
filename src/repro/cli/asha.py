@@ -42,6 +42,9 @@ def main(argv=None):
         '--models', default=tuple(), choices=MODEL_NAMES, type=str, nargs='*',
         help='Models to run')
     parser.add_argument(
+        '--force', action='store_true', default=False,
+        help='Register even if another similar task already exists')
+    parser.add_argument(
         '--config-dir-path',
         default=DEFAULT_CONFIG_DIR_PATH,
         help=('Path of directory containing the configurations of the datasets and models. '
@@ -56,7 +59,7 @@ def main(argv=None):
         for model_name in options.models:
             tags = options.tags + [dataset_name, model_name, 'repro']
 
-            if any(True for _ in mahler_client.find(tags=tags + [run.name])):
+            if any(True for _ in mahler_client.find(tags=tags + [run.name])) and not options.force:
                 print('HPO already registered for tags: {}'.format(", ".join(tags)))
                 continue
 
