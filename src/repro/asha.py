@@ -7,6 +7,7 @@ import random
 
 import mahler.client as mahler
 from mahler.core.utils.flatten import flatten, unflatten
+from mahler.core.utils.errors import SignalInterrupt
 
 from orion.core.io.space_builder import Space, DimensionBuilder
 
@@ -103,8 +104,16 @@ def compute_args(trials, space):
     min_args = None
     max_args = None
     mean_args = dict()
-    for trial in trials:
-        objective = trial['output']['last']['valid']['error_rate']
+
+    completed_trials = [trial for trial in trials if trial['registry']['status'] == 'Completed']
+    for trial in completed_trials:
+
+        try:
+            objective = trial['output']['last']['valid']['error_rate']
+        except Exception:
+            pprint.pprint(trial['output'])
+            raise
+
         if min_objective > objective:
             min_objective = objective
             min_args = trial['arguments']
@@ -124,16 +133,28 @@ def compute_args(trials, space):
             else:
                 mean_args[key] = item + mean_args.get(key, 0)
 
+    n_completed_trials = len(completed_trials)
+
     for key, item in mean_args.items():
         if key.endswith('milestones'):
-            mean_args[key] = [int(item_i / len(trials)) for item_i in mean_args[key]]
+            mean_args[key] = [int(item_i / n_completed_trials) for item_i in mean_args[key]]
         else:
-            mean_args[key] = item / len(trials)
+            mean_args[key] = item / n_completed_trials
 
     return min_args, max_args, mean_args
 
 
 def register_best_trials(mahler_client, asha, tags, container):
+
+    last_rung_trials = asha.rungs[len(FIDELITY_LEVELS) - 1]
+    print('Last rung trials:')
+    for trial in sorted(last_rung_trials, key=lambda trial: trial['id']):
+        print('{}: {}'.format(trial['id'], trial['registry']['status']))
+
+    if any(trial['registry']['status'] != 'Completed' for trial in last_rung_trials):
+        time.sleep(60)
+        # Force re-execution of the task until all trials are done
+        raise SignalInterrupt('Not all trials are completed. Rerun the task.')
 
     min_args, max_args, mean_args = compute_args(asha.rungs[len(FIDELITY_LEVELS) - 1], asha.space)
 
