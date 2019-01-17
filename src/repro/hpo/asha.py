@@ -53,6 +53,8 @@ class ASHA(object):
                 pprint.pprint(trial)
                 raise
 
+            return error_rate
+
         return [trial for i, trial in enumerate(sorted(completed_trials, key=key)) if i < k]
 
     def _fetch_trial_params(self, arguments):
