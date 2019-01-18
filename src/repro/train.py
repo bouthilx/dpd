@@ -37,20 +37,6 @@ def update(config, arguments):
     return merge_configs(config, kwargs)
 
 
-def update_lr(lr, optimizer, epoch):
-    if epoch < 1:
-        new_lr = lr / 10
-    elif epoch < 60:
-        new_lr = lr
-    elif epoch < 120:
-        new_lr = lr / 10
-    else:
-        new_lr = lr / 100
-
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = new_lr
-
-
 class MultiStepLR(torch.optim.lr_scheduler.MultiStepLR):
     def __init__(self, optimizer, milestones, gamma=0.1, div_first_epoch=False, last_epoch=-1):
         self.div_first_epoch = div_first_epoch

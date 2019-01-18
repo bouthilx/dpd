@@ -114,7 +114,7 @@ def test():
         options.num_workers = options.max_resource
 
     class Space(object):
-        def sample(self):
+        def sample(self, seed=0):
             return [[random.uniform(0, 1)]]
         def keys(self):
             return ['a']
@@ -125,7 +125,10 @@ def test():
             self.output = output
             self.status = mahler.core.status.Running('')
 
-    fidelities = dict(fidelity='abcde')  # efg')
+    def create_task(arguments, output):
+        return dict(arguments=arguments, output=output, registry=dict(status='Running'))
+
+    fidelities = dict(fidelity='abcd')  # efg')
 
     space = Space()
 
@@ -141,14 +144,14 @@ def test():
             if asha.final_rung_is_filled():
                 break
             params = asha.get_params()
-            task = Task(
+            task = create_task(
                 arguments=params,
                 output=dict(last=dict(valid=dict(error_rate=random.uniform(0, 1)))))
             tasks.append(task)
             asha.observe([task])
 
         for task in tasks:
-            task.status = mahler.core.status.Completed('')
+            task['registry']['status'] = 'Completed'
 
         print(" ".join("{}:{}".format(next(iter(fidelities.values()))[key], len(asha.rungs[key]))
                        for key in sorted(asha.rungs.keys())))

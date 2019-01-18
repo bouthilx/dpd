@@ -20,6 +20,12 @@ from repro.hpo.asha import ASHA
 logger = logging.getLogger(__name__)
 
 
+FIDELITY_LEVELS = [
+    2,  # 15,
+    4,  # 30,
+    8,  # 60,
+    16]  # 120]
+
 
 def convert_params(params):
     # Not samples from space but arguments of registered task, no need to convert
@@ -28,20 +34,12 @@ def convert_params(params):
 
     lr_schedule = params['optimizer']['lr_scheduler']['milestones']
     first_step = int(lr_schedule[0] >= 0.5)
-    next_steps = ((lr_schedule[1:] / lr_schedule[1:].sum()).cumsum() * (200 - first_step) +
+    next_steps = ((lr_schedule[1:] / lr_schedule[1:].sum()).cumsum() * (FIDELITY_LEVELS[-1] - first_step) +
                   first_step)
     milestones = [int(step) for step in ([first_step] + list(next_steps))]
     params['optimizer']['lr_scheduler']['milestones'] = milestones
 
     return params
-
-
-FIDELITY_LEVELS = [
-    10,
-    20,
-    50,
-    100,
-    200]
 
 
 run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20BG'}, resumable=True)(train)
@@ -161,6 +159,9 @@ def register_best_trials(mahler_client, asha, tags, container):
     # Use first trial in last rung, we don't care since they all have the same arguments
     # except for the optimizer HPs.
     config = asha.rungs[len(FIDELITY_LEVELS) - 1][0]['arguments']
+    # This time we want to test error as well.
+    config['compute_error_rates'] = ('train', 'valid', 'test')
+    config['max_epochs'] = FIDELITY_LEVELS[-1]  # Just to make sure...
 
     min_config = merge(config, min_args)
     max_config = merge(config, max_args)
