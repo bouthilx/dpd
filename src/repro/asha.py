@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 
 
 FIDELITY_LEVELS = [
-    2,  # 15,
-    4,  # 30,
-    8,  # 60,
-    16]  # 120]
+    15,
+    30,
+    60,
+    120]
 
 
 def convert_params(params):
