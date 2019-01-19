@@ -10,9 +10,6 @@ from ignite.engine import Events, create_supervised_trainer, create_supervised_e
 from ignite.handlers.timing import Timer
 from ignite.metrics import Accuracy, Loss
 
-from kleio.core.io.resolve_config import merge_configs
-from kleio.core.utils import unflatten
-
 import mahler.client as mahler
 
 import torch
@@ -26,6 +23,7 @@ import yaml
 from repro.dataset.base import build_dataset
 from repro.model.base import build_model, load_checkpoint, save_checkpoint, clear_checkpoint
 from repro.optimizer.base import build_optimizer
+from repro.utils.flatten import unflatten, merge_configs
 
 
 TIME_BUFFER = 60 * 5  # 5 minutes

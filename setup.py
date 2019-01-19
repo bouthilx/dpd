@@ -32,10 +32,8 @@ setup(
         'deploy': [
             'mahler.registry.mongodb',
             'mahler.scheduler.flow',
-            'kleio.core==0.1.0.a',
             'flow==6354eff'],
         'monitor': [
-            'kleio.core==0.1.0.a',
             'tqdm==4.28.1'
             'numpy==1.15.4',
             'dash==0.32.2',
@@ -50,7 +48,6 @@ setup(
         "git+https://github.com/bouthilx/mahler.scheduler.flow.git",
         "git+https://github.com/bouthilx/orion.git@db2d068#egg=orion.core-db2d068",
         "git+https://gitlab.com/bouthilx/orion.algo.skopt.git@577aabf#egg=orion.algo.skopt-577aabf",
-        "git+https://github.com/epistimio/kleio.git@prototype#egg=kleio.core-0.1.0.a",
         "git+https://github.com/bouthilx/flow.git@6354eff#egg=flow-6354eff",
     ],
     setup_requires=['setuptools', 'pytest-runner'],
