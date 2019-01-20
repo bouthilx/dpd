@@ -151,6 +151,13 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
         loading_file_path = checkpointing_file_path
     # Else, we are branching from another configuration.
 
+    print("\n\nLoading file path:")
+    print(loading_file_path)
+
+    print("\n\nCheckpointing file path:")
+    print(checkpointing_file_path)
+    print("\n\n")
+
     dataset, model, optimizer, lr_scheduler, device, seeds = build_experiment(
         data=data, model=model, optimizer=optimizer,
         model_seed=model_seed, sampler_seed=sampler_seed)
