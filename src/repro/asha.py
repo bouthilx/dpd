@@ -8,7 +8,7 @@ import time
 
 import mahler.client as mahler
 from mahler.core.utils.flatten import flatten, unflatten
-from mahler.core.utils.errors import SignalInterrupt, SignalSuspend
+from mahler.core.utils.errors import SignalInterruptTask, SignalSuspend
 
 from orion.core.io.space_builder import Space, DimensionBuilder
 
@@ -153,7 +153,7 @@ def register_best_trials(mahler_client, asha, tags, container):
     if any(trial['registry']['status'] != 'Completed' for trial in last_rung_trials):
         time.sleep(60)
         # Force re-execution of the task until all trials are done
-        raise SignalInterrupt('Not all trials are completed. Rerun the task.')
+        raise SignalInterruptTask('Not all trials are completed. Rerun the task.')
 
     min_args, max_args, mean_args = compute_args(asha.rungs[len(FIDELITY_LEVELS) - 1], asha.space)
 
