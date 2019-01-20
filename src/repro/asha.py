@@ -8,7 +8,7 @@ import time
 
 import mahler.client as mahler
 from mahler.core.utils.flatten import flatten, unflatten
-from mahler.core.utils.errors import SignalInterrupt
+from mahler.core.utils.errors import SignalInterrupt, SignalSuspend
 
 from orion.core.io.space_builder import Space, DimensionBuilder
 
@@ -237,6 +237,7 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     config = load_config(config_dir_path, dataset_name, model_name)
 
     asha = ASHA(space, dict(max_epochs=FIDELITY_LEVELS), **asha_config)
+    n_broken = 0
     for trial in trials:
         if trial['registry']['status'] == 'Cancelled':
             continue
@@ -245,6 +246,15 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
             continue
 
         asha.observe([trial])
+
+        n_broken += int(trial['registry']['status'] == 'Broken')
+
+    if n_broken > 10:
+        message = (
+            '{} trials are broken. Suspending creation of trials until investigation '
+            'is done.').format(n_broken)
+
+        raise SignalSuspend(message)
 
     if asha.final_rung_is_filled():
         return register_best_trials(mahler_client, asha, tags, container)
