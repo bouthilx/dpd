@@ -9,18 +9,26 @@ factories = fetch_factories('repro.model', __file__)
 
 
 CHECKPOINT_FILE_TEMPLATE = os.path.join(os.environ['REPRO_CHECKPOINT_DIR'], '{task_id}')
-TMP_CHECKPOINT_FILE_TEMPLATE = CHECKPOINT_FILE_TEMPLATE + '.tmp'
+TMP_CHECKPOINT_FILE_TEMPLATE = "{file_path}.tmp"
+
+
+def get_checkpoint_file_path():
+    # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
+    mahler_client = mahler.Client()
+
+    task = mahler_client.get_current_task()
+    if task is None:
+        print("Not running with mahler, no ID to create model file path.")
+        return None
+
+    return CHECKPOINT_FILE_TEMPLATE.format(task_id=str(task.id))
 
 
 def build_model(name=None, **kwargs):
     return factories[name](**kwargs)
 
 
-def save_checkpoint(mahler_client, model, optimizer, lr_scheduler, **metadata):
-    task = mahler_client.get_current_task()
-    if task is None:
-        print("Not running with mahler, no ID to identify artifacts")
-        return None
+def save_checkpoint(file_path, model, optimizer, lr_scheduler, **metadata):
 
     state_dict = dict(
         model=model.state_dict(),
@@ -28,8 +36,7 @@ def save_checkpoint(mahler_client, model, optimizer, lr_scheduler, **metadata):
         lr_scheduler=lr_scheduler.state_dict() if lr_scheduler else None,
         metadata=metadata)
 
-    tmp_file_path = TMP_CHECKPOINT_FILE_TEMPLATE.format(task_id=str(task.id))
-    file_path = CHECKPOINT_FILE_TEMPLATE.format(task_id=str(task.id))
+    tmp_file_path = TMP_CHECKPOINT_FILE_TEMPLATE.format(file_path=file_path)
 
     if not os.path.isdir(os.path.dirname(tmp_file_path)):
         os.makedirs(os.path.dirname(tmp_file_path))
@@ -40,13 +47,7 @@ def save_checkpoint(mahler_client, model, optimizer, lr_scheduler, **metadata):
     os.rename(tmp_file_path, file_path)
 
 
-def load_checkpoint(mahler_client, model, optimizer, lr_scheduler):
-    task = mahler_client.get_current_task()
-    if task is None:
-        print("Not running with mahler, no ID to identify artifacts")
-        return None
-
-    file_path = CHECKPOINT_FILE_TEMPLATE.format(task_id=str(task.id))
+def load_checkpoint(file_path, model, optimizer, lr_scheduler):
 
     if not os.path.exists(file_path):
         return None
@@ -61,13 +62,6 @@ def load_checkpoint(mahler_client, model, optimizer, lr_scheduler):
     return state_dict['metadata']
 
 
-def clear_checkpoint(mahler_client):
-    task = mahler_client.get_current_task()
-    if task is None:
-        print("Not running with mahler, no ID to identify artifacts")
-        return None
-
-    file_path = CHECKPOINT_FILE_TEMPLATE.format(task_id=str(task.id))
-
+def clear_checkpoint(file_path):
     if os.path.exists(file_path):
         os.remove(file_path)

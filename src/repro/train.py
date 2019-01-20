@@ -21,12 +21,13 @@ import tqdm
 import yaml
 
 from repro.dataset.base import build_dataset
-from repro.model.base import build_model, load_checkpoint, save_checkpoint, clear_checkpoint
+from repro.model.base import (
+    build_model, get_checkpoint_file_path, load_checkpoint, save_checkpoint, clear_checkpoint)
 from repro.optimizer.base import build_optimizer
 from repro.utils.flatten import unflatten, merge_configs
 
 
-TIME_BUFFER = 60 * 5  # 5 minutes
+TIME_BUFFER = 60 * 5  # 5 minute
 
 
 def update(config, arguments):
@@ -142,10 +143,15 @@ def main(argv=None):
 
 
 def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
-          compute_error_rates=('train', 'valid')):
+          compute_error_rates=('train', 'valid'),
+          loading_file_path=None):
 
-    # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
-    mahler_client = mahler.Client()
+    # Checkpointing file path is named based on Mahler task ID
+    checkpointing_file_path = get_checkpoint_file_path()
+
+    if loading_file_path is None:
+        loading_file_path = checkpointing_file_path
+    # Else, we are branching from another configuration.
 
     dataset, model, optimizer, lr_scheduler, device, seeds = build_experiment(
         data=data, model=model, optimizer=optimizer,
@@ -167,7 +173,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
     @trainer.on(Events.STARTED)
     def trainer_load_checkpoint(engine):
         engine.state.last_checkpoint = datetime.utcnow()
-        metadata = load_checkpoint(mahler_client, model, optimizer, lr_scheduler)
+        metadata = load_checkpoint(loading_file_path, model, optimizer, lr_scheduler)
         if metadata:
             print('Resuming from epoch {}'.format(metadata['epoch']))
             engine.state.epoch = metadata['epoch']
@@ -211,7 +217,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
         # TODO: Checkpoint lr_scheduler as well
         if (datetime.utcnow() - engine.state.last_checkpoint).total_seconds() > TIME_BUFFER:
             print('Checkpointing epoch {}'.format(engine.state.epoch))
-            save_checkpoint(mahler_client,
+            save_checkpoint(checkpointing_file_path,
                             model, optimizer, lr_scheduler,
                             epoch=engine.state.epoch,
                             iteration=engine.state.iteration,
@@ -222,7 +228,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
     trainer.run(dataset['train'], max_epochs=max_epochs)
 
     # Remove checkpoint to avoid cluttering the FS.
-    clear_checkpoint(mahler_client)
+    clear_checkpoint(checkpointing_file_path)
 
     return {'last': all_stats[-1], 'all': tuple(all_stats)}
 
