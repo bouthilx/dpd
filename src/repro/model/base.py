@@ -1,5 +1,7 @@
 import os
 
+import mahler.client as mahler
+
 import torch
 
 from repro.utils.factory import fetch_factories
@@ -14,9 +16,7 @@ TMP_CHECKPOINT_FILE_TEMPLATE = "{file_path}.tmp"
 
 def get_checkpoint_file_path():
     # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
-    mahler_client = mahler.Client()
-
-    task = mahler_client.get_current_task()
+    task = mahler.Client().get_current_task()
     if task is None:
         print("Not running with mahler, no ID to create model file path.")
         return None

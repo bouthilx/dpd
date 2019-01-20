@@ -10,8 +10,6 @@ from ignite.engine import Events, create_supervised_trainer, create_supervised_e
 from ignite.handlers.timing import Timer
 from ignite.metrics import Accuracy, Loss
 
-import mahler.client as mahler
-
 import torch
 import torch.nn.functional as F
 import torch.optim
