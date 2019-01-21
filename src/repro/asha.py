@@ -169,7 +169,7 @@ def register_best_trials(mahler_client, asha, tags, container):
     mean_config = merge(config, mean_args)
 
     new_trial_ids = defaultdict(list)
-    for i in range(20):
+    for i in range(10):
         new_trial_ids['min'].append(
             register_new_trial(mahler_client, min_config, tags + ['distrib', 'min'], container).id)
         # new_trial_ids['max'].append(

@@ -16,7 +16,7 @@ def create_trial(mahler_client, config_dir_path, dataset_name, model_name, tags,
     config = load_config(config_dir_path, dataset_name, model_name)
 
     new_trial_tasks = []
-    for i in range(20):
+    for i in range(10):
         trial_task = register_new_trial(mahler_client, config, tags + ['seed'], container)
         new_trial_tasks.append(trial_task)
         print('Registered task {}'.format(trial_task.id))
