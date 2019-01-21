@@ -29,6 +29,8 @@ def register_new_trial(mahler_client, config, tags, container):
     # Milestones from from https://arxiv.org/pdf/1603.05027.pdf
     print(config['optimizer'])
     config['max_epochs'] = 120
+    # This time we want test error as well.
+    config['compute_error_rates'] = ('train', 'valid', 'test')
     config['optimizer']['lr_scheduler'] = dict(milestones=[1, 30, 60, 120])
     return mahler_client.register(run.delay(**config), container=container, tags=tags)
 
