@@ -170,10 +170,10 @@ def register_best_trials(mahler_client, asha, tags, container):
 
     new_trial_ids = defaultdict(list)
     for i in range(20):
-        # new_trial_ids['min'].append(
-        #     register_new_trial(mahler_client, min_config, tags + ['distrib', 'min'], container).id)
-        new_trial_ids['max'].append(
-            register_new_trial(mahler_client, max_config, tags + ['distrib', 'max'], container).id)
+        new_trial_ids['min'].append(
+            register_new_trial(mahler_client, min_config, tags + ['distrib', 'min'], container).id)
+        # new_trial_ids['max'].append(
+        #     register_new_trial(mahler_client, max_config, tags + ['distrib', 'max'], container).id)
         # new_trial_ids['mean'].append(
         #     register_new_trial(mahler_client, mean_config, tags + ['distrib', 'mean'], container).id)
 
