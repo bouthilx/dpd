@@ -30,6 +30,9 @@ def build_model(name=None, **kwargs):
 
 def save_checkpoint(file_path, model, optimizer, lr_scheduler, **metadata):
 
+    if not file_path:
+        return
+
     state_dict = dict(
         model=model.state_dict(),
         optimizer=optimizer.state_dict(),
@@ -49,8 +52,8 @@ def save_checkpoint(file_path, model, optimizer, lr_scheduler, **metadata):
 
 def load_checkpoint(file_path, model, optimizer, lr_scheduler):
 
-    if not os.path.exists(file_path):
-        return None
+    if not file_path or not os.path.exists(file_path):
+        return
 
     with open(file_path, 'rb') as f:
         state_dict = torch.load(f)
