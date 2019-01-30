@@ -1,4 +1,3 @@
-from bisect import bisect_right
 from datetime import datetime
 import argparse
 import copy
@@ -29,19 +28,6 @@ def update(config, arguments):
     pairs = [argument.split("=") for argument in arguments]
     kwargs = unflatten(dict((pair[0], eval(pair[1])) for pair in pairs))
     return merge_configs(config, kwargs)
-
-
-class MultiStepLR(torch.optim.lr_scheduler.MultiStepLR):
-    def __init__(self, optimizer, milestones, gamma=0.1, div_first_epoch=False, last_epoch=-1):
-        self.div_first_epoch = div_first_epoch
-        super(MultiStepLR, self).__init__(optimizer, milestones, gamma=0.1, last_epoch=-1)
-
-    def get_lr(self):
-        if self.last_epoch < 1 and self.div_first_epoch:
-            return [base_lr * self.gamma for base_lr in self.base_lrs]
-
-        return [base_lr * self.gamma ** bisect_right(self.milestones, self.last_epoch)
-                for base_lr in self.base_lrs]
 
 
 def build_config(**kwargs):
@@ -104,12 +90,8 @@ def build_experiment(**config):
     optimizer = build_optimizer(model=model, **config['optimizer'])
 
     if lr_scheduler_config:
-        milestones = lr_scheduler_config['milestones']
-        div_first_epoch = milestones[0]
-        milestones = milestones[1:]
-        # TODO: Adapt last_epoch if resuming
-        lr_scheduler = MultiStepLR(
-            optimizer, milestones, gamma=0.1, div_first_epoch=div_first_epoch, last_epoch=-1)
+        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='max', patience=lr_scheduler_config['patience'])
     else:
         lr_scheduler = None
 
@@ -158,7 +140,7 @@ def main(argv=None):
 
 
 def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
-          patience=10, compute_test_error_rates=False, loading_file_path=None):
+          patience=None, compute_test_error_rates=False, loading_file_path=None):
 
     # Checkpointing file path is named based on Mahler task ID
     checkpointing_file_path = get_checkpoint_file_path()
@@ -177,6 +159,13 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
     dataset, model, optimizer, lr_scheduler, device, seeds = build_experiment(
         data=data, model=model, optimizer=optimizer,
         model_seed=model_seed, sampler_seed=sampler_seed)
+
+    if lr_scheduler is None and patience is None:
+        patience = 10
+    elif patience is None:
+        patience = lr_scheduler.patience * 2
+
+    print("\n\nEarly stopping with patience: {}\n\n".format(patience))
 
     timer = Timer(average=True)
 
