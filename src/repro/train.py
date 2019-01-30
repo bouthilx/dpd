@@ -1,20 +1,16 @@
-from bisect import bisect_right
 from datetime import datetime
 import argparse
+import copy
 import pprint
-import random
-
-import numpy
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
+from ignite.handlers.early_stopping import EarlyStopping
 from ignite.handlers.timing import Timer
 from ignite.metrics import Accuracy, Loss
 
 import torch
 import torch.nn.functional as F
 import torch.optim
-
-import tqdm
 
 import yaml
 
@@ -32,19 +28,6 @@ def update(config, arguments):
     pairs = [argument.split("=") for argument in arguments]
     kwargs = unflatten(dict((pair[0], eval(pair[1])) for pair in pairs))
     return merge_configs(config, kwargs)
-
-
-class MultiStepLR(torch.optim.lr_scheduler.MultiStepLR):
-    def __init__(self, optimizer, milestones, gamma=0.1, div_first_epoch=False, last_epoch=-1):
-        self.div_first_epoch = div_first_epoch
-        super(MultiStepLR, self).__init__(optimizer, milestones, gamma=0.1, last_epoch=-1)
-
-    def get_lr(self):
-        if self.last_epoch < 1 and self.div_first_epoch:
-            return [base_lr * self.gamma for base_lr in self.base_lrs]
-
-        return [base_lr * self.gamma ** bisect_right(self.milestones, self.last_epoch)
-                for base_lr in self.base_lrs]
 
 
 def build_config(**kwargs):
@@ -107,12 +90,8 @@ def build_experiment(**config):
     optimizer = build_optimizer(model=model, **config['optimizer'])
 
     if lr_scheduler_config:
-        milestones = lr_scheduler_config['milestones']
-        div_first_epoch = milestones[0]
-        milestones = milestones[1:]
-        # TODO: Adapt last_epoch if resuming
-        lr_scheduler = MultiStepLR(
-            optimizer, milestones, gamma=0.1, div_first_epoch=div_first_epoch, last_epoch=-1)
+        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', patience=lr_scheduler_config['patience'])
     else:
         lr_scheduler = None
 
@@ -121,6 +100,26 @@ def build_experiment(**config):
     print("\n\n")
 
     return dataset, model, optimizer, lr_scheduler, device, seeds
+
+
+def build_evaluators(trainer, model, device, patience, compute_test_error_rates):
+    evaluator = create_supervised_evaluator(
+        model, metrics={'accuracy': Accuracy(),
+                        'nll': Loss(F.cross_entropy)},
+        device=device)
+
+    evaluators = dict(train=evaluator, valid=copy.deepcopy(evaluator))
+    if compute_test_error_rates:
+        evaluators['test'] = evaluator
+
+    def score_function(engine):
+        return engine.state.metrics['accuracy']
+
+    early_stopping_handler = EarlyStopping(patience=patience, score_function=score_function,
+                                           trainer=trainer)
+    evaluators['valid'].add_event_handler(Events.COMPLETED, early_stopping_handler)
+
+    return evaluators
 
 
 def main(argv=None):
@@ -141,8 +140,7 @@ def main(argv=None):
 
 
 def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
-          compute_error_rates=('train', 'valid'),
-          loading_file_path=None):
+          patience=None, compute_test_error_rates=False, loading_file_path=None):
 
     # Checkpointing file path is named based on Mahler task ID
     checkpointing_file_path = get_checkpoint_file_path()
@@ -162,18 +160,24 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
         data=data, model=model, optimizer=optimizer,
         model_seed=model_seed, sampler_seed=sampler_seed)
 
+    if lr_scheduler is None and patience is None:
+        patience = 10
+    elif patience is None:
+        patience = lr_scheduler.patience * 2
+
+    print("\n\nEarly stopping with patience: {}\n\n".format(patience))
+
     timer = Timer(average=True)
 
     trainer = create_supervised_trainer(
         model, optimizer, torch.nn.functional.cross_entropy, device=device)
-    evaluator = create_supervised_evaluator(
-        model, metrics={'accuracy': Accuracy(),
-                        'nll': Loss(F.cross_entropy)},
-        device=device)
+
+    evaluators = build_evaluators(trainer, model, device, patience, compute_test_error_rates)
 
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
 
     all_stats = []
+    best_stats = {}
 
     @trainer.on(Events.STARTED)
     def trainer_load_checkpoint(engine):
@@ -185,6 +189,9 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
             engine.state.iteration = metadata['iteration']
             for epoch_stats in metadata['all_stats']:
                 all_stats.append(epoch_stats)
+                if (not best_stats or
+                        epoch_stats['valid']['error_rate'] < best_stats['valid']['error_rate']):
+                    best_stats.update(epoch_stats)
         else:
             engine.state.epoch = 0
             engine.state.iteration = 0
@@ -193,8 +200,6 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
 
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
-        if lr_scheduler:
-            lr_scheduler.step()
         seed(seeds['sampler'] + engine.state.epoch)
         model.train()
 
@@ -204,20 +209,24 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
 
         stats = dict(epoch=engine.state.epoch)
 
-        for name in ['train', 'valid', 'test']:
-            if name not in compute_error_rates:
-                continue
-
+        for name, evaluator in evaluators.items():
             loader = dataset[name]
             metrics = evaluator.run(loader).metrics
             stats[name] = dict(
                 loss=metrics['nll'],
                 error_rate=1. - metrics['accuracy'])
 
+        if lr_scheduler:
+            lr_scheduler.step(stats['valid']['error_rate'])
+
+        if not best_stats or stats['valid']['error_rate'] < best_stats['valid']['error_rate']:
+            best_stats.update(stats)
+
         all_stats.append(stats)
 
-        print("Epoch {:>4} Iteration {:>8} Loss {:>12} Time {:>6}".format(
-            engine.state.epoch, engine.state.iteration, engine.state.output, timer.value()))
+        print("Epoch {:>4} Iteration {:>12} Loss {:>8.3f} Best-Valid-ER {:>8.4f} Time {:>8.3f}".format(
+            engine.state.epoch, engine.state.iteration, engine.state.output,
+            best_stats['valid']['error_rate'], timer.value()))
 
         # TODO: Checkpoint lr_scheduler as well
         if (datetime.utcnow() - engine.state.last_checkpoint).total_seconds() > TIME_BUFFER:
@@ -235,7 +244,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
     # Remove checkpoint to avoid cluttering the FS.
     clear_checkpoint(checkpointing_file_path)
 
-    return {'last': all_stats[-1], 'all': tuple(all_stats)}
+    return {'best': best_stats, 'all': tuple(all_stats)}
 
 
 def seed(seed):

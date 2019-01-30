@@ -43,7 +43,7 @@ class ASHA(object):
 
     def _top_k(self, trials, k):
         completed_trials = (trial for trial in trials
-                            if trial['registry']['status'] == 'Completed')
+                            if trial['registry']['status'] == 'Completed' and trial['output'])
         # completed_trials = trials
 
         def key(trial):
