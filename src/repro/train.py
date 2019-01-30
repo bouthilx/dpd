@@ -1,20 +1,17 @@
 from bisect import bisect_right
 from datetime import datetime
 import argparse
+import copy
 import pprint
-import random
-
-import numpy
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
+from ignite.handlers.early_stopping import EarlyStopping
 from ignite.handlers.timing import Timer
 from ignite.metrics import Accuracy, Loss
 
 import torch
 import torch.nn.functional as F
 import torch.optim
-
-import tqdm
 
 import yaml
 
@@ -123,6 +120,26 @@ def build_experiment(**config):
     return dataset, model, optimizer, lr_scheduler, device, seeds
 
 
+def build_evaluators(trainer, model, device, patience, compute_test_error_rates):
+    evaluator = create_supervised_evaluator(
+        model, metrics={'accuracy': Accuracy(),
+                        'nll': Loss(F.cross_entropy)},
+        device=device)
+
+    evaluators = dict(train=evaluator, valid=copy.deepcopy(evaluator))
+    if compute_test_error_rates:
+        evaluators['test'] = evaluator
+
+    def score_function(engine):
+        return engine.state.metrics['accuracy']
+
+    early_stopping_handler = EarlyStopping(patience=patience, score_function=score_function,
+                                           trainer=trainer)
+    evaluators['valid'].add_event_handler(Events.COMPLETED, early_stopping_handler)
+
+    return evaluators
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Script to train a model')
     parser.add_argument('--config', help='Path to yaml configuration file for the trial')
@@ -141,8 +158,7 @@ def main(argv=None):
 
 
 def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
-          compute_error_rates=('train', 'valid'),
-          loading_file_path=None):
+          patience=10, compute_test_error_rates=False, loading_file_path=None):
 
     # Checkpointing file path is named based on Mahler task ID
     checkpointing_file_path = get_checkpoint_file_path()
@@ -166,10 +182,8 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
 
     trainer = create_supervised_trainer(
         model, optimizer, torch.nn.functional.cross_entropy, device=device)
-    evaluator = create_supervised_evaluator(
-        model, metrics={'accuracy': Accuracy(),
-                        'nll': Loss(F.cross_entropy)},
-        device=device)
+
+    evaluators = build_evaluators(trainer, model, device, patience, compute_test_error_rates)
 
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
 
@@ -204,10 +218,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
 
         stats = dict(epoch=engine.state.epoch)
 
-        for name in ['train', 'valid', 'test']:
-            if name not in compute_error_rates:
-                continue
-
+        for name, evaluator in evaluators.items():
             loader = dataset[name]
             metrics = evaluator.run(loader).metrics
             stats[name] = dict(
