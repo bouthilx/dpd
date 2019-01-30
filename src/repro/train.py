@@ -103,14 +103,15 @@ def build_experiment(**config):
 
 
 def build_evaluators(trainer, model, device, patience, compute_test_error_rates):
-    evaluator = create_supervised_evaluator(
-        model, metrics={'accuracy': Accuracy(),
-                        'nll': Loss(F.cross_entropy)},
-        device=device)
+    def build_evaluator():
+        return create_supervised_evaluator(
+            model, metrics={'accuracy': Accuracy(),
+                            'nll': Loss(F.cross_entropy)},
+            device=device)
 
-    evaluators = dict(train=evaluator, valid=copy.deepcopy(evaluator))
+    evaluators = dict(train=build_evaluator(), valid=build_evaluator())
     if compute_test_error_rates:
-        evaluators['test'] = evaluator
+        evaluators['test'] = build_evaluator()
 
     def score_function(engine):
         return engine.state.metrics['accuracy']

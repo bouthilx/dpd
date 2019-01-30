@@ -179,6 +179,7 @@ def register_new_trial(mahler_client, config, tags, container):
 
 def sample_new_config(asha, config):
     params = asha.get_params()
+    params['optimizer'] = dict(lr_scheduler=dict(patience=10))
     # Params can be all 
     return merge(config, params)
 
