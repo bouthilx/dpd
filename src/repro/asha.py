@@ -24,23 +24,7 @@ logger = logging.getLogger(__name__)
 FIDELITY_LEVELS = [
     15,
     30,
-    60,
-    120]
-
-
-def convert_params(params):
-    # Not samples from space but arguments of registered task, no need to convert
-    if isinstance(params['optimizer']['lr_scheduler']['milestones'], list):
-        return params
-
-    lr_schedule = params['optimizer']['lr_scheduler']['milestones']
-    first_step = int(lr_schedule[0] >= 0.5)
-    next_steps = ((lr_schedule[1:] / lr_schedule[1:].sum()).cumsum() * (FIDELITY_LEVELS[-1] - first_step) +
-                  first_step)
-    milestones = [int(step) for step in ([first_step] + list(next_steps))]
-    params['optimizer']['lr_scheduler']['milestones'] = milestones
-
-    return params
+    60]
 
 
 run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20BG'}, resumable=True)(train)
@@ -162,20 +146,20 @@ def register_best_trials(mahler_client, asha, tags, container):
     config = asha.rungs[len(FIDELITY_LEVELS) - 1][0]['arguments']
     # This time we want to test error as well.
     config['compute_error_rates'] = ('train', 'valid', 'test')
-    config['max_epochs'] = FIDELITY_LEVELS[-1]  # Just to make sure...
+    config['max_epochs'] = 120  # Just to make sure...
 
     min_config = merge(config, min_args)
     max_config = merge(config, max_args)
     mean_config = merge(config, mean_args)
 
     new_trial_ids = defaultdict(list)
-    for i in range(10):
+    for i in range(20):
         new_trial_ids['min'].append(
             register_new_trial(mahler_client, min_config, tags + ['distrib', 'min'], container).id)
-        # new_trial_ids['max'].append(
-        #     register_new_trial(mahler_client, max_config, tags + ['distrib', 'max'], container).id)
-        # new_trial_ids['mean'].append(
-        #     register_new_trial(mahler_client, mean_config, tags + ['distrib', 'mean'], container).id)
+        new_trial_ids['max'].append(
+            register_new_trial(mahler_client, max_config, tags + ['distrib', 'max'], container).id)
+        new_trial_ids['mean'].append(
+            register_new_trial(mahler_client, mean_config, tags + ['distrib', 'mean'], container).id)
 
     return new_trial_ids
 
@@ -195,7 +179,6 @@ def register_new_trial(mahler_client, config, tags, container):
 
 def sample_new_config(asha, config):
     params = asha.get_params()
-    params = convert_params(params)
     # Params can be all 
     return merge(config, params)
 
@@ -210,9 +193,6 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
     mahler_client = mahler.Client()
 
-    # TODO: Will this work in multiprocessing? Maybe the Dispatcher will be a different object 
-    #       because it is a different process.
-    # NOTE: It seems to...
     task = mahler_client.get_current_task()
     tags = [tag for tag in task.tags if tag != task.name]
     container = task.container
@@ -220,15 +200,13 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     projection = {'output': 1, 'arguments': 1, 'registry.status': 1}
     trials = mahler_client.find(tags=tags + ['asha', run.name], _return_doc=True, _projection=projection)
 
-    # *IMPORTANT* NOTE: 
+    # *IMPORTANT* NOTE:
     #     Space must be instantiated in the function otherwise its internal RNG state gets copied
     #     every time a task is forked in a process and each of them will start with the exact
     #     same state, leading to identical sampling. What a naughty side effect!
     space = Space()
     space['optimizer.lr'] = (
         DimensionBuilder().build('optimizer.lr', 'loguniform(1e-5, 0.5)'))
-    space['optimizer.lr_scheduler.milestones'] = (
-        DimensionBuilder().build('optimizer.lr_scheduler.milestones', 'uniform(0, 1, shape=(4, ))'))
     space['optimizer.momentum'] = (
         DimensionBuilder().build('optimizer.momentum', 'uniform(0., 0.9)'))
     space['optimizer.weight_decay'] = (
@@ -242,11 +220,9 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
         if trial['registry']['status'] == 'Cancelled':
             continue
 
-        if trial['registry']['status'] == 'Completed' and not trial['output']:
-            continue
-
         asha.observe([trial])
 
+        n_broken += int(trial['registry']['status'] == 'Completed' and not trial['output'])
         n_broken += int(trial['registry']['status'] == 'Broken')
 
     if n_broken > 10:
