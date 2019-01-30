@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 FIDELITY_LEVELS = [
-    15,
-    30,
-    60]
+    1,
+    2,
+    4]
 
 
 run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20BG'}, resumable=True)(train)
@@ -146,7 +146,7 @@ def register_best_trials(mahler_client, asha, tags, container):
     config = asha.rungs[len(FIDELITY_LEVELS) - 1][0]['arguments']
     # This time we want to test error as well.
     config['compute_error_rates'] = ('train', 'valid', 'test')
-    config['max_epochs'] = 120  # Just to make sure...
+    config['max_epochs'] = 8  # Just to make sure...
 
     min_config = merge(config, min_args)
     max_config = merge(config, max_args)
