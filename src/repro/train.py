@@ -91,7 +91,7 @@ def build_experiment(**config):
 
     if lr_scheduler_config:
         lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='max', patience=lr_scheduler_config['patience'])
+            optimizer, mode='min', patience=lr_scheduler_config['patience'])
     else:
         lr_scheduler = None
 
@@ -177,6 +177,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
 
     all_stats = []
+    best_stats = {}
 
     @trainer.on(Events.STARTED)
     def trainer_load_checkpoint(engine):
@@ -188,6 +189,9 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
             engine.state.iteration = metadata['iteration']
             for epoch_stats in metadata['all_stats']:
                 all_stats.append(epoch_stats)
+                if (not best_stats or
+                        epoch_stats['valid']['error_rate'] < best_stats['valid']['error_rate']):
+                    best_stats.update(epoch_stats)
         else:
             engine.state.epoch = 0
             engine.state.iteration = 0
@@ -196,8 +200,6 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
 
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
-        if lr_scheduler:
-            lr_scheduler.step()
         seed(seeds['sampler'] + engine.state.epoch)
         model.train()
 
@@ -214,10 +216,17 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
                 loss=metrics['nll'],
                 error_rate=1. - metrics['accuracy'])
 
+        if lr_scheduler:
+            lr_scheduler.step(stats['valid']['error_rate'])
+
+        if not best_stats or stats['valid']['error_rate'] < best_stats['valid']['error_rate']:
+            best_stats.update(stats)
+
         all_stats.append(stats)
 
-        print("Epoch {:>4} Iteration {:>8} Loss {:>12} Time {:>6}".format(
-            engine.state.epoch, engine.state.iteration, engine.state.output, timer.value()))
+        print("Epoch {:>4} Iteration {:>12} Loss {:>8.3f} Best-Valid-ER {:>8.4f} Time {:>8.3f}".format(
+            engine.state.epoch, engine.state.iteration, engine.state.output,
+            best_stats['valid']['error_rate'], timer.value()))
 
         # TODO: Checkpoint lr_scheduler as well
         if (datetime.utcnow() - engine.state.last_checkpoint).total_seconds() > TIME_BUFFER:
@@ -235,7 +244,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
     # Remove checkpoint to avoid cluttering the FS.
     clear_checkpoint(checkpointing_file_path)
 
-    return {'last': all_stats[-1], 'all': tuple(all_stats)}
+    return {'best': best_stats, 'all': tuple(all_stats)}
 
 
 def seed(seed):
