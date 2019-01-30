@@ -92,7 +92,7 @@ def compute_args(trials, space):
     for trial in completed_trials:
 
         try:
-            objective = trial['output']['last']['valid']['error_rate']
+            objective = trial['output']['best']['valid']['error_rate']
         except Exception:
             pprint.pprint(trial['output'])
             raise

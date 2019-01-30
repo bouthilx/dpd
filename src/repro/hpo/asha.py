@@ -48,7 +48,7 @@ class ASHA(object):
 
         def key(trial):
             try:
-                error_rate = trial['output']['last']['valid']['error_rate']
+                error_rate = trial['output']['best']['valid']['error_rate']
             except KeyError:
                 pprint.pprint(trial)
                 raise
@@ -146,7 +146,7 @@ def test():
             params = asha.get_params()
             task = create_task(
                 arguments=params,
-                output=dict(last=dict(valid=dict(error_rate=random.uniform(0, 1)))))
+                output=dict(best=dict(valid=dict(error_rate=random.uniform(0, 1)))))
             tasks.append(task)
             asha.observe([task])
 
