@@ -1,6 +1,5 @@
 from datetime import datetime
 import argparse
-import copy
 import pprint
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
@@ -225,7 +224,8 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
 
         all_stats.append(stats)
 
-        print("Epoch {:>4} Iteration {:>12} Loss {:>8.3f} Best-Valid-ER {:>8.4f} Time {:>8.3f}".format(
+        print(("Epoch {:>4} Iteration {:>12} Loss {:>8.3f} "
+               "Best-Valid-ER {:>8.4f} Time {:>8.3f}").format(
             engine.state.epoch, engine.state.iteration, engine.state.output,
             best_stats['valid']['error_rate'], timer.value()))
 

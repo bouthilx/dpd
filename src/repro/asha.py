@@ -73,7 +73,7 @@ def clean_duplicates(mahler_client, asha, new_tasks, tags):
                     try:
                         message = 'Duplicate of task {}'.format(originals[new_id]['id'])
                         mahler_client.cancel(task_id, message)
-                    except Exception as e:
+                    except Exception:
                         message = "Could not cancel task {}, a duplicate of {}".format(
                             task_id, originals[new_id]['id'])
                         logger.error(message)
@@ -145,8 +145,6 @@ def register_best_trials(mahler_client, asha, tags, container):
     # except for the optimizer HPs.
     config = asha.rungs[len(FIDELITY_LEVELS) - 1][0]['arguments']
     # This time we want to test error as well.
-    config['compute_error_rates'] = ('train', 'valid', 'test')
-    config['max_epochs'] = 8  # Just to make sure...
 
     min_config = merge(config, min_args)
     max_config = merge(config, max_args)
@@ -154,12 +152,12 @@ def register_best_trials(mahler_client, asha, tags, container):
 
     new_trial_ids = defaultdict(list)
     for i in range(20):
-        new_trial_ids['min'].append(
-            register_new_trial(mahler_client, min_config, tags + ['distrib', 'min'], container).id)
-        new_trial_ids['max'].append(
-            register_new_trial(mahler_client, max_config, tags + ['distrib', 'max'], container).id)
-        new_trial_ids['mean'].append(
-            register_new_trial(mahler_client, mean_config, tags + ['distrib', 'mean'], container).id)
+        for name, config in [('min', min_config), ('max', max_config), ('mean', mean_config)]:
+            config['compute_test_error_rates'] = True
+            config['max_epochs'] = 8  # Just to make sure...
+
+            new_trial_ids[name].append(
+                register_new_trial(mahler_client, config, tags + ['distrib', name], container).id)
 
     return new_trial_ids
 
@@ -168,7 +166,7 @@ def merge(config, subconfig):
     flattened_config = copy.deepcopy(flatten(config))
     flattened_config.update(flatten(subconfig))
     return unflatten(flattened_config)
-    
+
 
 def register_new_trial(mahler_client, config, tags, container):
     config = copy.deepcopy(config)
@@ -180,15 +178,15 @@ def register_new_trial(mahler_client, config, tags, container):
 def sample_new_config(asha, config):
     params = asha.get_params()
     params['optimizer']['lr_scheduler'] = dict(patience=10)
-    # Params can be all 
+    # Params can be all
     return merge(config, params)
 
 
 # TODO: Support resources properly
 #       (should submit based on largest request and enable running small tasks in large resource
 #        workers)
-#@mahler.operator(resources={'cpu':1, 'mem':'1GB'})
-@mahler.operator(resources={'cpu':4, 'gpu': 1, 'mem':'20GB'})
+# @mahler.operator(resources={'cpu':1, 'mem':'1GB'})
+@mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB'})
 def create_trial(config_dir_path, dataset_name, model_name, asha_config):
 
     # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
@@ -199,7 +197,8 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     container = task.container
 
     projection = {'output': 1, 'arguments': 1, 'registry.status': 1}
-    trials = mahler_client.find(tags=tags + ['asha', run.name], _return_doc=True, _projection=projection)
+    trials = mahler_client.find(tags=tags + ['asha', run.name], _return_doc=True,
+                                _projection=projection)
 
     # *IMPORTANT* NOTE:
     #     Space must be instantiated in the function otherwise its internal RNG state gets copied
