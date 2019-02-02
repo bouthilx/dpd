@@ -139,7 +139,7 @@ def main(argv=None):
     train(**config)
 
 
-def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=200,
+def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
           patience=None, compute_test_error_rates=False, loading_file_path=None):
 
     # Checkpointing file path is named based on Mahler task ID
