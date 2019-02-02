@@ -15,13 +15,12 @@ TMP_CHECKPOINT_FILE_TEMPLATE = "{file_path}.tmp"
 
 
 def get_checkpoint_file_path():
-    # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
-    task = mahler.Client().get_current_task()
-    if task is None:
+    task_id = mahler.get_current_task_id()
+    if task_id is None:
         print("Not running with mahler, no ID to create model file path.")
         return None
 
-    return CHECKPOINT_FILE_TEMPLATE.format(task_id=str(task.id))
+    return CHECKPOINT_FILE_TEMPLATE.format(task_id=str(task_id))
 
 
 def build_model(name=None, **kwargs):
