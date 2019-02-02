@@ -151,7 +151,7 @@ def register_best_trials(mahler_client, asha, tags, container):
     for i in range(20):
         for name, config in [('min', min_config), ('max', max_config), ('mean', mean_config)]:
             config['compute_test_error_rates'] = True
-            config['max_epochs'] = 8  # Just to make sure...
+            config['max_epochs'] = 120  # Just to make sure...
 
             new_trial_ids[name].append(
                 register_new_trial(mahler_client, config, tags + ['distrib', name], container).id)
@@ -238,7 +238,7 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_configs
 
     new_trial_tasks = defaultdict(list)
     for name, configurator in configurators.items():
-        config['max_epochs'] = 8
+        config['max_epochs'] = 120
         new_task_config = sample_new_config(configurator, config)
         trial_task = register_new_trial(
             mahler_client, new_task_config, tags + [name], container)

@@ -20,8 +20,8 @@ MODEL_NAMES = (
 
 configurator_configs = [
     dict(name='random_search'),
-    dict(name='asha', reduction_factor=2, max_resource=5,
-         fidelity_space=dict(max_epochs=[1, 2, 4]))]
+    dict(name='asha', reduction_factor=4, max_resource=20,
+         fidelity_space=dict(max_epochs=[15, 30, 60]))]
 
 
 def main(argv=None):
