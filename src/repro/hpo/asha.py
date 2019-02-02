@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 # mahler.find(tags, status=None)
 
 
+def build(space, fidelity_space, reduction_factor, max_resource):
+    return ASHA(space, fidelity_space, reduction_factor, max_resource)
+
+
 class ASHA(object):
     def __init__(self, space, fidelity_space, reduction_factor, max_resource):
 
