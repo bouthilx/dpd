@@ -15,16 +15,10 @@ from orion.core.io.space_builder import Space, DimensionBuilder
 import yaml
 
 from repro.train import train
-from repro.hpo.asha import ASHA
+from repro.hpo.base import build_hpo
 
 
 logger = logging.getLogger(__name__)
-
-
-FIDELITY_LEVELS = [
-    1,
-    2,
-    4]
 
 
 run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20BG'}, resumable=True)(train)
@@ -47,18 +41,21 @@ def load_config(config_dir_path, dataset_name, model_name):
     return config
 
 
-def clean_duplicates(mahler_client, asha, new_tasks, tags):
+def clean_duplicates(mahler_client, configurators, new_trial_tasks, tags):
+
+    asha = configurators.get('asha', None)
+    if asha is None:
+        return
+
     number_of_duplicates = 0
     number_of_duplicates = defaultdict(int)
     originals = dict()
-    # TODO: Fetch documents rather than tasks, and use projection to just get the arguments
-    #       This is all we need here.
-    for task_document in mahler_client.find(tags=tags + [run.name], _return_doc=True,
+    for task_document in mahler_client.find(tags=tags + ['asha', run.name], _return_doc=True,
                                             _projection={'arguments': 1, 'registry.status': 1}):
         task_arguments = task_document['arguments']
         task_id = task_document['id']
 
-        for new_task in new_tasks:
+        for new_task in new_trial_tasks['asha']:
             new_arguments = new_task.arguments
             new_id = new_task.id
 
@@ -129,7 +126,7 @@ def compute_args(trials, space):
 
 def register_best_trials(mahler_client, asha, tags, container):
 
-    last_rung_trials = asha.rungs[len(FIDELITY_LEVELS) - 1]
+    last_rung_trials = asha.rungs[len(asha.fidelity_levels) - 1]
     print('Last rung trials:')
     for trial in sorted(last_rung_trials, key=lambda trial: trial['id']):
         print('{}: {}'.format(trial['id'], trial['registry']['status']))
@@ -139,11 +136,11 @@ def register_best_trials(mahler_client, asha, tags, container):
         # Force re-execution of the task until all trials are done
         raise SignalInterruptTask('Not all trials are completed. Rerun the task.')
 
-    min_args, max_args, mean_args = compute_args(asha.rungs[len(FIDELITY_LEVELS) - 1], asha.space)
+    min_args, max_args, mean_args = compute_args(asha.rungs[len(asha.fidelity_levels) - 1], asha.space)
 
     # Use first trial in last rung, we don't care since they all have the same arguments
     # except for the optimizer HPs.
-    config = asha.rungs[len(FIDELITY_LEVELS) - 1][0]['arguments']
+    config = asha.rungs[len(asha.fidelity_levels) - 1][0]['arguments']
     # This time we want to test error as well.
 
     min_config = merge(config, min_args)
@@ -175,8 +172,8 @@ def register_new_trial(mahler_client, config, tags, container):
     return mahler_client.register(run.delay(**config), container=container, tags=tags)
 
 
-def sample_new_config(asha, config):
-    params = asha.get_params()
+def sample_new_config(configurator, config):
+    params = configurator.get_params()
     params['optimizer']['lr_scheduler'] = dict(patience=10)
     # Params can be all
     return merge(config, params)
@@ -187,7 +184,7 @@ def sample_new_config(asha, config):
 #        workers)
 # @mahler.operator(resources={'cpu':1, 'mem':'1GB'})
 @mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB'})
-def create_trial(config_dir_path, dataset_name, model_name, asha_config):
+def create_trial(config_dir_path, dataset_name, model_name, configurator_configs):
 
     # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
     mahler_client = mahler.Client()
@@ -197,9 +194,6 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
     container = task.container
 
     projection = {'output': 1, 'arguments': 1, 'registry.status': 1}
-    trials = mahler_client.find(tags=tags + ['asha', run.name], _return_doc=True,
-                                _projection=projection)
-
     # *IMPORTANT* NOTE:
     #     Space must be instantiated in the function otherwise its internal RNG state gets copied
     #     every time a task is forked in a process and each of them will start with the exact
@@ -214,16 +208,23 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
 
     config = load_config(config_dir_path, dataset_name, model_name)
 
-    asha = ASHA(space, dict(max_epochs=FIDELITY_LEVELS), **asha_config)
+    configurators = dict()
+    for configurator_config in configurator_configs:
+        configurators[configurator_config['name']] = build_hpo(space, **configurator_config)
+
     n_broken = 0
-    for trial in trials:
-        if trial['registry']['status'] == 'Cancelled':
-            continue
+    for name, configurator in configurators.items():
+        trials = mahler_client.find(tags=tags + [name, run.name], _return_doc=True,
+                                    _projection=projection)
 
-        asha.observe([trial])
+        for trial in trials:
+            if trial['registry']['status'] == 'Cancelled':
+                continue
 
-        n_broken += int(trial['registry']['status'] == 'Completed' and not trial['output'])
-        n_broken += int(trial['registry']['status'] == 'Broken')
+            configurator.observe([trial])
+
+            n_broken += int(trial['registry']['status'] == 'Completed' and not trial['output'])
+            n_broken += int(trial['registry']['status'] == 'Broken')
 
     if n_broken > 10:
         message = (
@@ -232,23 +233,26 @@ def create_trial(config_dir_path, dataset_name, model_name, asha_config):
 
         raise SignalSuspend(message)
 
-    if asha.final_rung_is_filled():
-        return register_best_trials(mahler_client, asha, tags, container)
+    if 'asha' in configurators and configurators['asha'].final_rung_is_filled():
+        return register_best_trials(mahler_client, configurators['asha'], tags, container)
 
-    new_trial_tasks = []
-    for i in range(2):  # 20):
-        new_task_config = sample_new_config(asha, config)
-        trial_task = register_new_trial(mahler_client, new_task_config, tags + ['asha'], container)
+    new_trial_tasks = defaultdict(list)
+    for name, configurator in configurators.items():
+        config['max_epochs'] = 120
+        new_task_config = sample_new_config(configurator, config)
+        trial_task = register_new_trial(
+            mahler_client, new_task_config, tags + [name], container)
         # pprint.pprint(trial_task.to_dict(report=True))
-        asha.observe([trial_task.to_dict(report=True)])
-        new_trial_tasks.append(trial_task)
+        configurator.observe([trial_task.to_dict(report=True)])
+        new_trial_tasks[name].append(trial_task)
 
-    clean_duplicates(mahler_client, asha, new_trial_tasks, tags)
+    clean_duplicates(mahler_client, configurators, new_trial_tasks, tags)
 
     create_task = mahler_client.register(
         create_trial.delay(config_dir_path=config_dir_path, dataset_name=dataset_name,
-                           model_name=model_name, asha_config=asha_config),
+                           model_name=model_name, configurator_configs=configurator_configs),
         container=container, tags=tags)
 
-    return dict(trial_task_ids=[str(new_trial_task.id) for new_trial_task in new_trial_tasks],
+    return dict(trial_task_ids={name: [str(new_task.id) for new_task in new_tasks]
+                                for name, new_tasks in new_trial_tasks.items()},
                 create_trial_task_id=str(create_task.id))
