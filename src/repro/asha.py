@@ -238,7 +238,7 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_configs
 
     new_trial_tasks = defaultdict(list)
     for name, configurator in configurators.items():
-        config['max_epochs'] = 120
+        config['max_epochs'] = 8
         new_task_config = sample_new_config(configurator, config)
         trial_task = register_new_trial(
             mahler_client, new_task_config, tags + [name], container)
