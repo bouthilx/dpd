@@ -1,5 +1,4 @@
 from collections import defaultdict
-from math import exp, log
 import argparse
 import logging
 import pprint
@@ -32,6 +31,11 @@ class ASHA(object):
         self.reduction_factor = reduction_factor
         self.base = len(self.fidelity_levels) - 1
 
+    def get_bests(self, max_resource):
+        last_rung = self.rungs[len(self.fidelity_levels) - 1]
+        assert max_resource == len(last_rung), "{} != {}".format(max_resource, len(last_rung))
+        return last_rung
+
     def reset(self):
         self.rungs = defaultdict(list)
 
@@ -42,7 +46,7 @@ class ASHA(object):
         for trial in trials:
             self.rungs[self._fetch_rung_id(trial)].append(trial)
 
-    def final_rung_is_filled(self):
+    def is_completed(self):
         return len(self.rungs.get(self.base, [])) >= self.max_resource
 
     def _top_k(self, trials, k):
@@ -106,7 +110,8 @@ class ASHA(object):
 def test():
     parser = argparse.ArgumentParser(description='Script to train a model')
     parser.add_argument(
-        '--reduction-factor', type=int, required=True, help='Reduction factor for number of workers')
+        '--reduction-factor', type=int, required=True,
+        help='Reduction factor for number of workers')
     parser.add_argument(
         '--max-resource', default=1, type=int, help='Number of trials to run at full fidelity')
     parser.add_argument(
@@ -120,6 +125,7 @@ def test():
     class Space(object):
         def sample(self, seed=0):
             return [[random.uniform(0, 1)]]
+
         def keys(self):
             return ['a']
 
@@ -159,6 +165,7 @@ def test():
 
         print(" ".join("{}:{}".format(next(iter(fidelities.values()))[key], len(asha.rungs[key]))
                        for key in sorted(asha.rungs.keys())))
+
 
 if __name__ == "__main__":
     test()
