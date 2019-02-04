@@ -120,13 +120,26 @@ def register_best_trials(mahler_client, configurator, tags, container, max_epoch
                          number_of_seeds):
 
     best_trials = configurator.get_bests(max_resource)
-    print('Best trials:')
+    print('\nBest trials:')
     for trial in sorted(best_trials, key=lambda trial: trial['id']):
         print('{}: {}'.format(trial['id'], trial['registry']['status']))
 
     if any(trial['registry']['status'] != 'Completed' for trial in best_trials):
+        mahler_client.close()
         # Force re-execution of the task until all trials are done
         raise SignalInterruptTask('Not all trials are completed. Rerun the task.')
+
+    projection = {'tags': 1}
+
+    trials = mahler_client.find(tags=tags + ['distrib'], _return_doc=True,
+                                _projection=projection)
+
+    existing_trials = dict(min=0, max=0, mean=0)
+    for trial in trials:
+        for name in ['min', 'max', 'mean']:
+            if name in trial['tags']:
+                existing_trials[name] += 1
+                break
 
     min_args, max_args, mean_args = compute_args(best_trials, configurator.space)
 
@@ -138,17 +151,14 @@ def register_best_trials(mahler_client, configurator, tags, container, max_epoch
     max_config = merge(config, max_args)
     mean_config = merge(config, mean_args)
 
-    new_trial_ids = defaultdict(list)
-    for i in range(number_of_seeds):
-        for name, config in [('min', min_config), ('max', max_config), ('mean', mean_config)]:
+    print('\nNew trials registered for distribution evaluation:')
+    for name, config in [('min', min_config), ('max', max_config), ('mean', mean_config)]:
+        for i in range(number_of_seeds - existing_trials[name]):
             # This time we want to test error as well.
             config['compute_test_error_rates'] = True
             config['max_epochs'] = max_epochs  # Just to make sure...
 
-            new_trial_ids[name].append(
-                register_new_trial(mahler_client, config, tags + ['distrib', name], container).id)
-
-    return new_trial_ids
+            register_new_trial(mahler_client, config, tags + ['distrib', name], container)
 
 
 def merge(config, subconfig):
@@ -161,8 +171,9 @@ def register_new_trial(mahler_client, trial_config, tags, container):
     trial_config = copy.deepcopy(trial_config)
     trial_config['model_seed'] = random.uniform(1, 10000)
     trial_config['sampler_seed'] = random.uniform(1, 10000)
-    return mahler_client.register(
-        run.delay(**trial_config), container=container, tags=tags)
+    new_task = mahler_client.register(run.delay(**trial_config), container=container, tags=tags)
+    print(new_task.id, sorted(new_task.tags))
+    return new_task
 
 
 def sample_new_config(configurator, config):
