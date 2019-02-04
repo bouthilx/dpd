@@ -205,7 +205,7 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
     configurator = build_hpo(space, **configurator_config)
 
     n_broken = 0
-    trials = mahler_client.find(tags=tags + [run.name], _return_doc=True,
+    trials = mahler_client.find(tags=tags + [run.name, 'hpo'], _return_doc=True,
                                 _projection=projection)
 
     for trial in trials:
@@ -233,7 +233,7 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
     config['max_epochs'] = max_epochs
     new_task_config = sample_new_config(configurator, config)
     trial_task = register_new_trial(
-        mahler_client, new_task_config, tags, container)
+        mahler_client, new_task_config, tags + ['hpo'], container)
     # pprint.pprint(trial_task.to_dict(report=True))
     configurator.observe([trial_task.to_dict(report=True)])
 
