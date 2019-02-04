@@ -29,9 +29,10 @@ def total_trials(max_epochs, reduction_factor, max_resource, fidelity_space, **k
     return int(math.ceil(total_epochs / max_epochs))
 
 
-MAX_EPOCHS = 8  # 120
-MAX_RESOURCE = 5  # 20
-NUMBER_OF_SEEDS = 5  # 20
+MAX_EPOCHS = 120
+MAX_WORKERS = 10
+MAX_RESOURCE = 20
+NUMBER_OF_SEEDS = 20
 
 # asha_config = dict(name='asha', reduction_factor=4, max_resource=MAX_RESOURCE,
 #                    fidelity_space=dict(max_epochs=[15, 30, 60]))
@@ -100,6 +101,7 @@ def main(argv=None):
                 model_name=model_name,
                 configurator_config=configurator_config,
                 max_epochs=MAX_EPOCHS,
+                max_workers=MAX_WORKERS,
                 max_resource=MAX_RESOURCE,
                 number_of_seeds=NUMBER_OF_SEEDS),
             container=options.container, tags=tags)

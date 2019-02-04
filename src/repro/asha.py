@@ -41,16 +41,13 @@ def load_config(config_dir_path, dataset_name, model_name):
     return config
 
 
-def clean_duplicates(mahler_client, configurator, new_task, tags):
+def clean_duplicates(mahler_client, configurator, new_tasks, tags):
 
     if configurator.__class__.__name__.lower() not in ['asha']:
         return
 
     # NOTE: For now only ASHA may produce duplicates on race conditions.
     asha = configurator
-
-    new_arguments = new_task.arguments
-    new_id = new_task.id
 
     number_of_duplicates = 0
     number_of_duplicates = defaultdict(int)
@@ -60,23 +57,27 @@ def clean_duplicates(mahler_client, configurator, new_task, tags):
         task_arguments = task_document['arguments']
         task_id = task_document['id']
 
-        if task_arguments[asha.fidelity_dim] != new_arguments[asha.fidelity_dim]:
-            continue
+        for new_task in new_tasks:
+            new_arguments = new_task.arguments
+            new_id = new_task.id
 
-        if asha._fetch_trial_params(task_arguments) == asha._fetch_trial_params(new_arguments):
-            number_of_duplicates[new_id] += 1
+            if task_arguments[asha.fidelity_dim] != new_arguments[asha.fidelity_dim]:
+                continue
 
-            if (number_of_duplicates[new_id] > 1 and
-                    task_document['registry']['status'] != 'Cancelled'):
-                try:
-                    message = 'Duplicate of task {}'.format(originals[new_id]['id'])
-                    mahler_client.cancel(task_id, message)
-                except Exception:
-                    message = "Could not cancel task {}, a duplicate of {}".format(
-                        task_id, originals[new_id]['id'])
-                    logger.error(message)
-            else:
-                originals[new_id] = task_document
+            if asha._fetch_trial_params(task_arguments) == asha._fetch_trial_params(new_arguments):
+                number_of_duplicates[new_id] += 1
+
+                if (number_of_duplicates[new_id] > 1 and
+                        task_document['registry']['status'] != 'Cancelled'):
+                    try:
+                        message = 'Duplicate of task {}'.format(originals[new_id]['id'])
+                        mahler_client.cancel(task_id, message)
+                    except Exception:
+                        message = "Could not cancel task {}, a duplicate of {}".format(
+                            task_id, originals[new_id]['id'])
+                        logger.error(message)
+                else:
+                    originals[new_id] = task_document
 
 
 def compute_args(trials, space):
@@ -189,7 +190,7 @@ def sample_new_config(configurator, config):
 # @mahler.operator(resources={'cpu':1, 'mem':'1GB'})
 @mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB'})
 def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
-                 max_epochs, max_resource, number_of_seeds):
+                 max_epochs, max_workers, max_resource, number_of_seeds):
 
     # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
     mahler_client = mahler.Client()
@@ -219,6 +220,8 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
     trials = mahler_client.find(tags=tags + [run.name, 'hpo'], _return_doc=True,
                                 _projection=projection)
 
+    n_uncompleted = 0
+
     for trial in trials:
         if trial['registry']['status'] == 'Cancelled':
             continue
@@ -227,12 +230,15 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
 
         n_broken += int(trial['registry']['status'] == 'Completed' and not trial['output'])
         n_broken += int(trial['registry']['status'] == 'Broken')
+        # Not Completed, or Completed but broken with empty output
+        n_uncompleted += int(trial['registry']['status'] != 'Completed' or not trial['output'])
 
     if n_broken > 10:
         message = (
             '{} trials are broken. Suspending creation of trials until investigation '
             'is done.').format(n_broken)
 
+        mahler_client.close()
         raise SignalSuspend(message)
 
     if configurator.is_completed():
@@ -241,16 +247,19 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
         mahler_client.close()
         return new_best_trials
 
-    config['max_epochs'] = max_epochs
-    new_task_config = sample_new_config(configurator, config)
-    trial_task = register_new_trial(
-        mahler_client, new_task_config, tags + ['hpo'], container)
-    # pprint.pprint(trial_task.to_dict(report=True))
-    configurator.observe([trial_task.to_dict(report=True)])
+    new_trial_tasks = []
+    for i in range(max_workers - n_uncompleted):
+        config['max_epochs'] = max_epochs
+        new_task_config = sample_new_config(configurator, config)
+        trial_task = register_new_trial(
+            mahler_client, new_task_config, tags + ['hpo'], container)
+        # pprint.pprint(trial_task.to_dict(report=True))
+        configurator.observe([trial_task.to_dict(report=True)])
+        new_trial_tasks.append(trial_task)
 
     # TODO: We should remove this, there is normally only one create_trial task at a time for a
     #       given set of tags.
-    clean_duplicates(mahler_client, configurator, trial_task, tags)
+    clean_duplicates(mahler_client, configurator, new_trial_tasks, tags)
 
     mahler_client.close()
     raise SignalInterruptTask('HPO not completed')
