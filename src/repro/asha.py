@@ -125,7 +125,6 @@ def register_best_trials(mahler_client, configurator, tags, container, max_epoch
         print('{}: {}'.format(trial['id'], trial['registry']['status']))
 
     if any(trial['registry']['status'] != 'Completed' for trial in best_trials):
-        time.sleep(60)
         # Force re-execution of the task until all trials are done
         raise SignalInterruptTask('Not all trials are completed. Rerun the task.')
 
@@ -242,14 +241,8 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
     #       given set of tags.
     clean_duplicates(mahler_client, configurator, trial_task, tags)
 
-    create_task = mahler_client.register(
-        create_trial.delay(config_dir_path=config_dir_path, dataset_name=dataset_name,
-                           model_name=model_name, configurator_config=configurator_config,
-                           max_epochs=max_epochs, max_resource=max_resource,
-                           number_of_seeds=number_of_seeds),
-        container=container, tags=tags)
-
     mahler_client.close()
+    raise SignalInterruptTask('HPO not completed')
 
-    return dict(trial_task_id=trial_task.id,
-                create_trial_task_id=str(create_task.id))
+# Sample trials for n workers
+# if not trials submitted interrupt
