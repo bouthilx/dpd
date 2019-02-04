@@ -222,6 +222,7 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
 
     n_uncompleted = 0
 
+    print("Training configurator")
     for trial in trials:
         if trial['registry']['status'] == 'Cancelled':
             continue
@@ -231,7 +232,9 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
         n_broken += int(trial['registry']['status'] == 'Completed' and not trial['output'])
         n_broken += int(trial['registry']['status'] == 'Broken')
         # Not Completed, or Completed but broken with empty output
-        n_uncompleted += int(trial['registry']['status'] != 'Completed' or not trial['output'])
+        if trial['registry']['status'] != 'Completed' or not trial['output']:
+            print(trial['id'], trial['registry']['status'])
+            n_uncompleted += 1
 
     if n_broken > 10:
         message = (
@@ -247,6 +250,7 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
         mahler_client.close()
         return new_best_trials
 
+    print("Generating new configurations")
     new_trial_tasks = []
     for i in range(max_workers - n_uncompleted):
         config['max_epochs'] = max_epochs
