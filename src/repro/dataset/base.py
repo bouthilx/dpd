@@ -9,9 +9,10 @@ factories = fetch_factories('repro.dataset', __file__)
 
 def set_data_path(config):
     if "REPRO_DATA_PATH" not in os.environ:
-        raise RuntimeError("Environment variable REPRO_DATA_PATH is not set")
+        print('WARNING: Environment variable REPRO_DATA_PATH is not set. '
+              'Data will be downloaded in {}'.format(os.getcwd()))
 
-    config['data_path'] = os.environ['REPRO_DATA_PATH']
+    config['data_path'] = os.environ.get('REPRO_DATA_PATH', os.getcwd())
 
 
 def build_dataset(name=None, **kwargs):
