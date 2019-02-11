@@ -1,6 +1,10 @@
 import os
+from pathlib import Path
 
-import mahler.client as mahler
+try:
+    import mahler.client as mahler
+except ImportError:
+    mahler = None
 
 import torch
 
@@ -10,14 +14,17 @@ from repro.utils.factory import fetch_factories
 factories = fetch_factories('repro.model', __file__)
 
 
-CHECKPOINT_FILE_TEMPLATE = os.path.join(os.environ['REPRO_CHECKPOINT_DIR'], '{task_id}')
+CHECKPOINT_DIR = os.environ.get('REPRO_CHECKPOINT_DIR', str(Path.home()))
+CHECKPOINT_FILE_TEMPLATE = os.path.join(CHECKPOINT_DIR, '{task_id}')
 TMP_CHECKPOINT_FILE_TEMPLATE = "{file_path}.tmp"
 
 
 def get_checkpoint_file_path():
-    task_id = mahler.get_current_task_id()
+    task_id = None
+    if mahler is not None:
+        task_id = mahler.get_current_task_id()
     if task_id is None:
-        print("Not running with mahler, no ID to create model file path.")
+        print("Not running with mahler, no ID to create model file path for checkpointing.")
         return None
 
     return CHECKPOINT_FILE_TEMPLATE.format(task_id=str(task_id))

@@ -22,7 +22,6 @@ setup(
     install_requires=[],
     extras_require = {
         'execute':  [
-            'mahler.registry.mongodb',
             'torch==1.0.0', 'torchvision', 'torchnet', 'pytorch-ignite', 'tqdm',
             'h5py==2.9.0', 'Pillow==5.3.0', 'filelock==3.0.10'],
         'configure': [
