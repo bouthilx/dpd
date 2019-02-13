@@ -1,6 +1,8 @@
 from datetime import datetime
 import argparse
 import pprint
+import random
+import numpy
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
 from ignite.handlers.early_stopping import EarlyStopping
@@ -259,13 +261,13 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
 def seed(seed):
     if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = True
-        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = False 
+        torch.backends.cudnn.deterministic = True
 
-    # random.seed(seed)
-    # numpy.random.seed(seed)
-    # torch.manual_seed(seed)
-    # torch.cuda.manual_seed_all(seed)
+    random.seed(seed)
+    numpy.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 if __name__ == "__main__":
