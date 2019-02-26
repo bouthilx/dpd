@@ -4,8 +4,7 @@ import logging
 import pprint
 import random
 
-import mahler.core.status
-from mahler.core.utils.flatten import flatten, unflatten
+from repro.utils.flatten import flatten, unflatten
 
 
 logger = logging.getLogger(__name__)
@@ -100,7 +99,7 @@ class ASHA(object):
         randomseed = random.randint(0, 100000)
         arguments = unflatten(dict(zip(self.space.keys(), self.space.sample(seed=randomseed)[0])))
         arguments[self.fidelity_dim] = self.fidelity_levels[0]
-        logger.info('Sampling:\n{}'.format(pprint.pformat(arguments)))
+        logger.debug('Sampling:\n{}'.format(pprint.pformat(arguments)))
         return arguments
 
 
@@ -121,6 +120,8 @@ def test():
 
     if options.num_workers is None:
         options.num_workers = options.max_resource
+
+    import mahler.core.status
 
     class Space(object):
         def sample(self, seed=0):

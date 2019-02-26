@@ -2,7 +2,7 @@ import logging
 import pprint
 import random
 
-from mahler.core.utils.flatten import unflatten
+from repro.utils.flatten import unflatten
 
 
 logger = logging.getLogger(__name__)
@@ -43,8 +43,9 @@ class RandomSearch(object):
     def observe(self, trials):
         self.trials += trials
 
-    def get_params(self):
-        randomseed = random.randint(0, 100000)
-        arguments = unflatten(dict(zip(self.space.keys(), self.space.sample(seed=randomseed)[0])))
-        logger.info('Sampling:\n{}'.format(pprint.pformat(arguments)))
+    def get_params(self, seed=None):
+        if seed is None:
+            seed = random.randint(0, 100000)
+        arguments = unflatten(dict(zip(self.space.keys(), self.space.sample(seed=seed)[0])))
+        logger.debug('Sampling:\n{}'.format(pprint.pformat(arguments)))
         return arguments
