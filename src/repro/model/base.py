@@ -72,5 +72,6 @@ def load_checkpoint(file_path, model, optimizer, lr_scheduler):
 
 
 def clear_checkpoint(file_path):
-    if os.path.exists(file_path):
+
+    if file_path and os.path.exists(file_path):
         os.remove(file_path)
