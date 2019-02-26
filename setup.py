@@ -16,14 +16,18 @@ setup(
     name='repro',
     description='',
     long_description=LONG_DESCRIPTION,
-    author_email='Xavier Bouthillier, Simon Guiroy, Cesar Laurent',
+    author_email='Xavier Bouthillier, Cesar Laurent, Simon Guiroy',
     package_dir={'': 'src'},
     packages=find_namespace_packages('src'),
     install_requires=[],
     extras_require = {
         'execute':  [
+            'orion.core',
             'torch==1.0.0', 'torchvision', 'torchnet', 'pytorch-ignite', 'tqdm',
             'h5py==2.9.0', 'Pillow==5.3.0', 'filelock==3.0.10'],
+        'coco': [
+            'cocoex'],
+        'mini': [],
         'configure': [
             'mahler.registry.mongodb',
             'orion.core==db2d068',
