@@ -7,14 +7,15 @@ from torchvision import datasets, transforms
 DATA_SIZE = 60000
 
 
-def build(batch_size, data_path, num_workers):
+def build(batch_size, data_path, num_workers, mini=False):
+
+    transformations = [transforms.ToTensor()]
+
+    if mini:
+        transformations.insert(0, transforms.Resize(8))
 
     dataset = datasets.SVHN(
-        data_path, split='train', download=True,
-        transform=transforms.Compose([
-            transforms.ToTensor(),
-            # transforms.Normalize((0.1307,), (0.3081,))]))
-            ]))
+        data_path, split='train', download=True, transform=transforms.Compose(transformations))
     sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(dataset))))
 
     train_loader = torch.utils.data.DataLoader(
@@ -26,11 +27,7 @@ def build(batch_size, data_path, num_workers):
         dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
 
     dataset = datasets.SVHN(
-        data_path, split='test', download=True,
-        transform=transforms.Compose([
-            transforms.ToTensor(),
-            # transforms.Normalize((0.1307,), (0.3081,))]))
-            ]))
+        data_path, split='test', download=True, transform=transforms.Compose(transformations))
     sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(dataset))))
 
     test_loader = torch.utils.data.DataLoader(

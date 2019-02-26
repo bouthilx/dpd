@@ -7,13 +7,15 @@ from torchvision import datasets, transforms
 DATA_SIZE = 45000
 
 
-def build(batch_size, data_path, num_workers):
-    transform = transforms.Compose(
-    [transforms.ToTensor(),
-     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+def build(batch_size, data_path, num_workers, mini=False):
+    transformations = [transforms.ToTensor(),
+                       transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+
+    if mini:
+        transformations.insert(0, transforms.Resize(8))
 
     trainset = datasets.CIFAR10(root=data_path, train=True,
-                                download=True, transform=transform)
+                                download=True, transform=transforms.Compose(transformations))
 
     sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(trainset))))
 
@@ -26,7 +28,7 @@ def build(batch_size, data_path, num_workers):
                                                sampler=sampler, num_workers=num_workers)
 
     testset = datasets.CIFAR10(root=data_path, train=False,
-                               download=True, transform=transform)
+                               download=True, transform=transforms.Compose(transformations))
 
     sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(testset))))
 

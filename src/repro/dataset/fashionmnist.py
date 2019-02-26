@@ -7,11 +7,15 @@ from torchvision import datasets, transforms
 DATA_SIZE = 50000
 
 
-def build(batch_size, data_path, num_workers):
+def build(batch_size, data_path, num_workers, mini=False):
+
+    transformations = [transforms.ToTensor()]
+
+    if mini:
+        transformations.insert(0, transforms.Resize(7))
 
     dataset = datasets.FashionMNIST(
-        data_path, train=True, download=True,
-        transform=transforms.ToTensor())
+        data_path, train=True, download=True, transform=transforms.Compose(transformations))
     sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(dataset))))
 
     train_loader = torch.utils.data.DataLoader(
@@ -23,8 +27,7 @@ def build(batch_size, data_path, num_workers):
         dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
 
     dataset = datasets.FashionMNIST(
-        data_path, train=False, download=True,
-        transform=transforms.ToTensor())
+        data_path, train=False, download=True, transform=transforms.Compose(transformations))
     sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(dataset))))
 
     test_loader = torch.utils.data.DataLoader(

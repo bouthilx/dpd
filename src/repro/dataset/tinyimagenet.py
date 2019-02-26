@@ -172,36 +172,44 @@ def create_val_loader(dirpath):
             yield x, train_dataset.class_to_idx[class_id]
 
 
-def build(batch_size, data_path, num_workers):
-    normalize = transforms.Normalize(mean=[0.4194, 0.3898, 0.3454],
-                                     std=[0.303, 0.291, 0.293])
+def build(batch_size, data_path, num_workers, mini=False):
 
     build_dataset(data_path)
 
+    normalize = transforms.Normalize(mean=[0.4194, 0.3898, 0.3454],
+                                     std=[0.303, 0.291, 0.293])
+
+    transformations = [
+        transforms.ToPILImage(),
+        transforms.RandomCrop(64, padding=8),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize]
+
+    if mini:
+        transformations.insert(2, transforms.Resize(16))
+
     dataset = HDF5Dataset(
         os.path.join(data_path, TRAIN_FILENAME),
-        transforms.Compose([
-            # data is stored as uint8
-            transforms.ToPILImage(),
-            transforms.RandomCrop(64, padding=8),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ]),
+        transforms.Compose(transformations),
         transforms.Lambda(lambda x: int(x)))
 
     train_loader = torch.utils.data.DataLoader(
         dataset=dataset, batch_size=batch_size, num_workers=num_workers,
         pin_memory=True, shuffle=True)
 
+    transformations = [
+        # data is stored as uint8
+        transforms.ToPILImage(),
+        transforms.ToTensor(),
+        normalize]
+
+    if mini:
+        transformations.insert(1, transforms.Resize(16))
+
     dataset = HDF5Dataset(
         os.path.join(data_path, VAL_FILENAME),
-        transforms.Compose([
-            # data is stored as uint8
-            transforms.ToPILImage(),
-            transforms.ToTensor(),
-            normalize,
-        ]),
+        transforms.Compose(transformations),
         transforms.Lambda(lambda x: int(x)))
 
     sampler = torch.utils.data.sampler.SubsetRandomSampler(range(int(len(dataset) / 2)))
@@ -217,7 +225,7 @@ def build(batch_size, data_path, num_workers):
         sampler=sampler, shuffle=False)
 
     return OrderedDict(train=train_loader, valid=valid_loader, test=test_loader,
-                       input_size=(3, 64, 64), num_classes=200)
+                       input_size=(3, 16 if mini else 64, 16 if mini else 64), num_classes=200)
 
 
 if __name__ == "__main__":
