@@ -1,3 +1,6 @@
+import copy
+
+
 def flatten(dictionary, returncopy=True):
     def _flatten(dictionary):
         if dictionary == {}:
