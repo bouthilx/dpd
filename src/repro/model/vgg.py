@@ -79,8 +79,8 @@ class VGG(nn.Module):
         layers = []
         
         for v in cfg:
-            if v == 'M':
-                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+            if isinstance(v, str) and v.startswith('M'):
+                layers += [nn.MaxPool2d(kernel_size=len(v) + 1, stride=len(v) + 1)]
             else:
                 conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
                 # con2d.register_forward_hook(save_computations)
