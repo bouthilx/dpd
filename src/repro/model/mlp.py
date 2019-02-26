@@ -1,16 +1,10 @@
-import math
-
 import numpy
 
-import torch
 import torch.nn as nn
 
 
-# MLP with two hidden layers, each with 200 neurons, and ReLU activations.
-
 class MLP(nn.Module):
-    def __init__(self, input_size=28*28, num_classes=10, layers=tuple(), bias=True):
-        self.architecture = 'MLP--2x200_neurons--input_size=' + str(input_size) + '--num_classes=' + str(num_classes)
+    def __init__(self, input_size=28 * 28, num_classes=10, layers=tuple(), bias=True):
         self.input_size = input_size
         super(MLP, self).__init__()
         insizes = [input_size] + list(layers)
