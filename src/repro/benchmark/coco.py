@@ -82,7 +82,8 @@ class COCOBenchmark:
         return ['0.0',  # No diff
                 '2.1',  # Fewer H-Ps
                 '2.2',  # More H-Ps
-                '2.3',  # Prior changed
+                '2.3.a',  # Prior changed
+                '2.3.b',  # Prior changed
                 '2.4.a',
                 '2.4.b',
                 '3.1',  # Code change without any effect
@@ -266,7 +267,7 @@ def hpo_coco(problem_config, space_config, configurator_config, previous_tags=No
         for trial in previous_run['output']['trials']:
             try:
                 configurator.observe([trial])
-            except ValueError:
+            except AssertionError:
                 pass
 
         print('There was {} compatible trials out of {}'.format(
