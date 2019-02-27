@@ -30,6 +30,7 @@ setup(
             'cocoex'],
         'mini': [],
         'deploy': [
+            'mahler.core==83438f1',
             'mahler.registry.mongodb==87146aa',
             'mahler.scheduler.flow==b6d2d0e',
             'flow==6354eff'],
@@ -44,7 +45,7 @@ setup(
     },
     dependency_links=[
         "git+https://github.com/bouthilx/mahler.git@@83438f1#egg=mahler.core-83438f1",
-        "git+https://github.com/bouthilx/mahler.registry.mongodb.git@@87146aa#egg=mahler.registry.mongodb-87146aa",
+        "git+https://github.com/bouthilx/mahler.registry.mongodb.git@87146aa#egg=mahler.registry.mongodb-87146aa",
         "git+https://github.com/bouthilx/mahler.scheduler.flow.git@b6d2d0e#egg=mahler.scheduler.flow-b6d2d0e",
         "git+https://github.com/bouthilx/orion.git@db2d068#egg=orion.core-db2d068",
         "git+https://gitlab.com/bouthilx/orion.algo.skopt.git@71dcdd8#egg=orion.algo.skopt-71dcdd8",
