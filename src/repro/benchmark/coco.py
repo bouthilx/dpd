@@ -29,13 +29,14 @@ class COCOBenchmark:
     name = 'coco'
 
     def __init__(self, problem_ids=None, dimensions=None, instances=None, scenarios=None,
-                 previous_tags=None):
+                 previous_tags=None, warm_start=0):
         self.verify(problem_ids, dimensions, instances, scenarios)
         self._problem_ids = problem_ids
         self._dimensions = dimensions
         self._instances = instances
         self._scenarios = scenarios
         self._previous_tags = previous_tags
+        self._warm_start = warm_start
         self.suite = cocoex.Suite("bbob", "year: 2016", "")
 
     def verify(self, problems, dimensions, instances, scenarios):
@@ -49,6 +50,8 @@ class COCOBenchmark:
         benchmark_parser.add_argument('--dimensions', choices=self.dimensions, type=int, nargs='*')
         benchmark_parser.add_argument('--instances', choices=self.instances, type=int, nargs='*')
         benchmark_parser.add_argument('--scenarios', choices=self.scenarios, type=str, nargs='*')
+        benchmark_parser.add_argument('--warm-start', type=int, default=50)
+        benchmark_parser.add_argument('--max-trials', type=int, default=50)
 
         return benchmark_parser
 
@@ -82,7 +85,8 @@ class COCOBenchmark:
         return ['0.0',  # No diff
                 '2.1',  # Fewer H-Ps
                 '2.2',  # More H-Ps
-                '2.3',  # Prior changed
+                '2.3.a',  # Prior changed
+                '2.3.b',
                 '2.4.a',
                 '2.4.b',
                 '3.1',  # Code change without any effect
@@ -101,16 +105,17 @@ class COCOBenchmark:
                 self.suite.get_problem_by_function_dimension_instance(*config[:-1])
             except cocoex.exceptions.NoSuchProblemException:
                 continue
-            yield Problem(*(config + (self._previous_tags, )))
+            yield Problem(*(config + (self._previous_tags, self._warm_start)))
 
 
 class Problem:
-    def __init__(self, problem_id, dimension, instance_id, scenario, previous_tags):
+    def __init__(self, problem_id, dimension, instance_id, scenario, previous_tags, warm_start):
         self.id = problem_id
         self.dimension = dimension
         self.instance_id = instance_id
         self.scenario = scenario
         self.previous_tags = previous_tags
+        self.warm_start = warm_start
 
     @property
     def tags(self):
@@ -118,6 +123,7 @@ class Problem:
                 'f{:03d}'.format(self.id), 'd{:03d}'.format(self.dimension),
                 'i{:02d}'.format(self.instance_id),
                 's-{}'.format(self.scenario)]
+                'm-{}'.format(self.warm_start)]
         if self.previous_tags:
             tags += ['pv-{}'.format(tag) for tag in self.previous_tags]
         else:
@@ -170,7 +176,8 @@ class Problem:
             self.config,
             self.space_config,
             configurator_config=configurator_config,
-            previous_tags=self.previous_tags)
+            previous_tags=self.previous_tags,
+            warm_start=self.warm_start)
 
         print(self.id, self.dimension, self.instance_id)
         print(len(rval['objectives']), min(rval['objectives']))
@@ -239,11 +246,10 @@ def build_problem(problem_id, nb_of_dimensions, instance_id):
 # 2.4.b (mid, upper) -> (lower, mid)
 
 
-def hpo_coco(problem_config, space_config, configurator_config, previous_tags=None):
+def hpo_coco(problem_config, space_config, configurator_config, previous_tags=None, warm_start=0):
 
     problem = build_problem(**problem_config)
     space = build_space(problem, **space_config)
-    print(configurator_config)
     configurator = build_hpo(space, **configurator_config)
 
     if previous_tags is not None:
@@ -263,10 +269,10 @@ def hpo_coco(problem_config, space_config, configurator_config, previous_tags=No
         # TODO: For new hyper-parameters, sample a value from prior, even if we know the default
         #       We should compare with one setting the default.
         # TODO: For missing hyper-parameters, just drop it from params.
-        for trial in previous_run['output']['trials']:
+        for trial in previous_run['output']['trials'][:warm_start]:
             try:
                 configurator.observe([trial])
-            except ValueError:
+            except AssertionError:
                 pass
 
         print('There was {} compatible trials out of {}'.format(
@@ -321,6 +327,6 @@ if mahler is not None:
 
 
 if cocoex is not None:
-    def build(problems=None, dimensions=None, instances=None, scenarios=None, **kwargs):
-        print(dict(problems=None, dimensions=None, instances=None, scenarios=None), kwargs)
-        return COCOBenchmark(problems, dimensions, instances, scenarios)
+    def build(problems=None, dimensions=None, instances=None, scenarios=None, previous_tags=None,
+              warm_start=None, **kwargs):
+        return COCOBenchmark(problems, dimensions, instances, scenarios, previous_tags, warm_start)

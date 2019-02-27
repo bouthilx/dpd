@@ -168,26 +168,30 @@ def register(benchmark, options):
         previous_problem = copy.deepcopy(problem)
         previous_problem.scenario = SCENARIOS[problem.scenario][0]
         previous_problem.previous_tags = SCENARIOS[problem.scenario][1]
+        configurator_config['max_trials'] = problem.warm_start + options.max_trials
+        previous_problem.warm_start = 0
 
         if not is_registered(mahler_client, previous_problem, supp_tags):
             previous_problem.register(mahler_client, configurator_config, options.container,
                                       previous_problem.tags + supp_tags)
 
         # Register an equivalent problem which won't be warm-started
-        # In 0.0 there is no changes, so the previous problem would be the same as the cold turkey,
-        # hence we don't need the cold turkey.
-        if problem.scenario != "0.0":
-            cold_turkey = copy.deepcopy(problem)
-            cold_turkey.previous_tags = None
+        cold_turkey = copy.deepcopy(problem)
+        cold_turkey.scenario = problem.scenario
+        cold_turkey.previous_tags = None
+        cold_turkey.warm_start = 0
+        configurator_config['max_trials'] = options.max_trials
 
-            if not is_registered(mahler_client, cold_turkey, supp_tags):
-                previous_problem.register(mahler_client, configurator_config, options.container,
-                                          cold_turkey.tags + supp_tags)
+        if not is_registered(mahler_client, cold_turkey, supp_tags):
+            cold_turkey.register(mahler_client, configurator_config, options.container,
+                                 cold_turkey.tags + supp_tags)
 
-        # Make deep copy because same problem is bundled with different cofigurators
+        # Make deep copy because same problem is bundled with different configurators
         problem = copy.deepcopy(problem)
         # Don't want pv-hpo-transfer
         problem.previous_tags = previous_problem.tags + supp_tags[:-1]
+        configurator_config['max_trials'] = options.max_trials
+        assert problem.warm_start > 0
 
         # Register the problem that will be warm-started based on results of `previous_problem`
         problem.register(mahler_client, configurator_config, options.container,
