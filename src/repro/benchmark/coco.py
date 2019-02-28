@@ -197,6 +197,59 @@ class Problem:
 
         print('Registered', *tags)
 
+    def visualize(self, results, filename_template):
+        # TODO: Add visualize to benchmark as well, where it compares problems together.
+
+        PHASES = ['warmup', 'cold-turkey', 'transfer']
+
+        import matplotlib.pyplot as plt
+        ALPHA = 0.1
+
+        colors = {
+            'random_search': 'blue',
+            'bayesopt': 'red'}
+
+        # Plot warmup
+        for configurator_name, configurator_results in results.items():
+            for instance_results in configurator_results['warmup']:
+                plt.plot(range(len(instance_results)), instance_results,
+                         color=colors[configurator_name], alpha=ALPHA)
+                plt.plot(range(len(instance_results)),
+                         [min(instance_results[:i]) for i in range(1, len(instance_results) + 1)],
+                         color=colors[configurator_name], linestyle=':')
+
+        # Plot cold-turkey
+        for configurator_name, configurator_results in results.items():
+            for instance_results in configurator_results['cold-turkey']:
+                x = list(range(self.warm_start, len(instance_results) + self.warm_start))
+                plt.plot(x, instance_results,
+                         linestyle='--', color=colors[configurator_name], alpha=ALPHA)
+                plt.plot(x,
+                         [min(instance_results[:i]) for i in range(1, len(instance_results) + 1)],
+                         color=colors[configurator_name], linestyle='--')
+
+        # Plot transfer
+        for configurator_name, configurator_results in results.items():
+            for i, instance_results in enumerate(configurator_results['transfer']):
+                x = list(range(self.warm_start, len(instance_results) + self.warm_start))
+                plt.plot(x, instance_results,
+                         color=colors[configurator_name], alpha=ALPHA)
+                plt.plot(x,
+                         [min(instance_results[:i]) for i in range(1, len(instance_results) + 1)],
+                         color=colors[configurator_name],
+                         label=configurator_name if i == 0 else None)
+
+        plt.axvline(x=self.warm_start, linestyle='--')
+
+        plt.title("f{:03d}-d{:03d}-s{}".format(self.id, self.dimension, self.scenario))
+
+        plt.legend()
+        file_path = filename_template.format(id=self.id, dimension=self.dimension,
+                                             scenario=self.scenario)
+        plt.savefig(file_path, dpi=300)
+        print("Saved", file_path)
+        plt.clf()
+
 
 # function_id = 1
 # dimensions = 2
