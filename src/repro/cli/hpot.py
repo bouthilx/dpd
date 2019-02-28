@@ -11,6 +11,7 @@ import itertools
 import logging
 import math
 import os
+import re
 
 import yaml
 
@@ -92,13 +93,20 @@ def main(argv=None):
         print('Mahler is not installed, cannot register benchmarks.')
         register_subparsers = []
 
-    for subparser in itertools.chain(execute_subparsers, register_subparsers):
+    visualize_subparser = subparsers.add_parser('visualize')
+    visualize_subparsers = visualize_subparser.add_subparsers(
+        dest='benchmark', title='benchmark', description='benchmark', help='')
+    visualize_subparsers = build_benchmark_subparsers(visualize_subparsers)
+
+    for subparser in itertools.chain(execute_subparsers, register_subparsers, visualize_subparsers):
         subparser.add_argument(
             '--configurators', type=str, required=True, nargs='*',
             choices=list(repro.hpo.base.factories.keys()))
         # subparser.add_argument(
         #     '--seed', type=int, default=1,
         #     help='Seed for the benchmark.')
+
+    for subparser in itertools.chain(execute_subparsers, register_subparsers):
         subparser.add_argument(
             '--config-dir-path', required=True,
             help='Directory with the configuration of the HPO algorithms.')
@@ -113,6 +121,12 @@ def main(argv=None):
             '--force', action='store_true', default=False,
             help='Register even if another similar task already exists')
 
+    for visualize_subparser in visualize_subparsers:
+        visualize_subparser.add_argument('--version', type=str, required=True)
+        visualize_subparser.add_argument(
+            '--output', type=str,
+            default='f{id:03d}-d{dimension:03d}-s{scenario}.png')
+
     options = parser.parse_args(argv)
 
     levels = {0: logging.WARNING,
@@ -126,6 +140,8 @@ def main(argv=None):
         register(benchmark, options)
     elif options.command == 'execute':
         execute(benchmark, options)
+    elif options.command == 'visualize':
+        visualize(benchmark, options)
     else:
         raise ValueError('Invalid command: {}'.format(options.command))
 
@@ -168,26 +184,30 @@ def register(benchmark, options):
         previous_problem = copy.deepcopy(problem)
         previous_problem.scenario = SCENARIOS[problem.scenario][0]
         previous_problem.previous_tags = SCENARIOS[problem.scenario][1]
+        configurator_config['max_trials'] = problem.warm_start + options.max_trials
+        previous_problem.warm_start = 0
 
         if not is_registered(mahler_client, previous_problem, supp_tags):
             previous_problem.register(mahler_client, configurator_config, options.container,
                                       previous_problem.tags + supp_tags)
 
         # Register an equivalent problem which won't be warm-started
-        # In 0.0 there is no changes, so the previous problem would be the same as the cold turkey,
-        # hence we don't need the cold turkey.
-        if problem.scenario != "0.0":
-            cold_turkey = copy.deepcopy(problem)
-            cold_turkey.previous_tags = None
+        cold_turkey = copy.deepcopy(problem)
+        cold_turkey.scenario = problem.scenario
+        cold_turkey.previous_tags = None
+        cold_turkey.warm_start = 0
+        configurator_config['max_trials'] = options.max_trials
 
-            if not is_registered(mahler_client, cold_turkey, supp_tags):
-                previous_problem.register(mahler_client, configurator_config, options.container,
-                                          cold_turkey.tags + supp_tags)
+        if not is_registered(mahler_client, cold_turkey, supp_tags):
+            cold_turkey.register(mahler_client, configurator_config, options.container,
+                                 cold_turkey.tags + supp_tags)
 
-        # Make deep copy because same problem is bundled with different cofigurators
+        # Make deep copy because same problem is bundled with different configurators
         problem = copy.deepcopy(problem)
         # Don't want pv-hpo-transfer
         problem.previous_tags = previous_problem.tags + supp_tags[:-1]
+        configurator_config['max_trials'] = options.max_trials
+        assert problem.warm_start > 0
 
         # Register the problem that will be warm-started based on results of `previous_problem`
         problem.register(mahler_client, configurator_config, options.container,
@@ -201,6 +221,122 @@ def execute(benchmark, options):
         configurator_config = load_config(options.config_dir_path, benchmark.name, configurator)
 
         problem.execute(configurator_config)
+
+
+INSTANCE_TAG_REGEX = re.compile('^(pv-)*(df-[0-5]|i[0-9]{2})$')
+
+
+def visualize(benchmark, options):
+
+    # TODO: Option to save in json, option to load from json
+    mahler_client = mahler.Client()
+
+    seen = set()
+    for problem in benchmark.problems:
+        name = "_".join(problem.tags[1:3] + problem.tags[4:5])
+        if name in seen:
+            continue
+        seen.add(name)
+
+        results = {}
+
+        # ***
+        # Load previous problem
+        # Load cold-turkey
+        # Load problem itself
+        # ***
+
+        projection = {'output': 1, 'registry.status': 1, 'registry.tags': 1, 'arguments': 1}
+
+
+        # Load problem used to warm-start
+        previous_problem = copy.deepcopy(problem)
+        previous_problem.scenario = SCENARIOS[problem.scenario][0]
+        previous_problem.previous_tags = SCENARIOS[problem.scenario][1]
+
+        tags = previous_problem.tags + [options.version]
+        # Remove all instance related tags
+        filtered_tags = [tag for tag in tags if not INSTANCE_TAG_REGEX.match(tag)]
+
+        previous_trials = mahler_client.find(tags=filtered_tags, _return_doc=True,
+                                             _projection=projection)
+
+        for trials in previous_trials:
+            configurator_name = trials['arguments']['configurator_config']['name']
+            # dont care about instance
+
+            if configurator_name not in results:
+                results[configurator_name] = dict(warmup=[])
+
+            if trials['registry']['status'] != 'Completed':
+                logger.warning('Ignoring uncompleted trial {}'.format(trials['id']))
+                continue
+
+            results[configurator_name]['warmup'].append(trials['output']['objectives'])
+
+        if not results:
+            print('{} is empty'.format(name))
+            continue
+
+        # Load cold-turkey
+        cold_turkey = copy.deepcopy(problem)
+        cold_turkey.previous_tags = None
+        cold_turkey.warm_start = 0
+
+        tags = cold_turkey.tags + [options.version]
+        # Remove all instance related tags
+        filtered_tags = [tag for tag in tags if not INSTANCE_TAG_REGEX.match(tag)]
+
+        cold_turkey_trials = mahler_client.find(tags=filtered_tags, _return_doc=True,
+                                                _projection=projection)
+        
+        for trials in cold_turkey_trials:
+            configurator_name = trials['arguments']['configurator_config']['name']
+            # dont care about instance
+            if configurator_name not in results:
+                results[configurator_name] = {'cold-turkey': []}
+            elif 'cold-turkey' not in results[configurator_name]:
+                results[configurator_name]['cold-turkey'] = []
+
+            if trials['registry']['status'] != 'Completed':
+                logger.warning('Ignoring uncompleted trial {}'.format(trials['id']))
+                continue
+
+            # TODO: Remove clamping to 50
+            results[configurator_name]['cold-turkey'].append(trials['output']['objectives'])
+
+        # Load problem
+        problem = copy.deepcopy(problem)
+        problem.previous_tags = previous_problem.tags + [options.version]
+        tags = problem.tags + [options.version]
+
+        # Remove all instance related tags
+        filtered_tags = [tag for tag in tags if not INSTANCE_TAG_REGEX.match(tag)]
+
+        problem_trials = mahler_client.find(tags=filtered_tags, _return_doc=True,
+                                                _projection=projection)
+
+        for trials in problem_trials:
+            problem.warm_start = trials['arguments']['warm_start']
+            configurator_name = trials['arguments']['configurator_config']['name']
+            # dont care about instance
+
+            if configurator_name not in results:
+                results[configurator_name] = dict(transfer=[])
+            elif 'transfer' not in results[configurator_name]:
+                results[configurator_name]['transfer'] = []
+
+            if trials['registry']['status'] != 'Completed':
+                logger.warning('Ignoring uncompleted trial {}'.format(trials['id']))
+                continue
+
+            results[configurator_name]['transfer'].append(trials['output']['objectives'])
+
+        # Fetch data
+        #     for each configurator
+        #         for each phase (warmup, cold-turkey, transfer)
+        #             for each instance
+        problem.visualize(results, options.output)
 
 
 SCENARIOS = {
