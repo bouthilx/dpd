@@ -86,7 +86,7 @@ class COCOBenchmark:
                 '2.1',  # Fewer H-Ps
                 '2.2',  # More H-Ps
                 '2.3.a',  # Prior changed
-                '2.3.b',
+                '2.3.b',  # Prior changed
                 '2.4.a',
                 '2.4.b',
                 '3.1',  # Code change without any effect
