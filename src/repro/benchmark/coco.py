@@ -247,6 +247,8 @@ class Problem:
 
         plt.title("f{:03d}-d{:03d}-s{}".format(self.id, self.dimension, self.scenario))
 
+        plt.yscale('log')
+
         plt.legend()
         file_path = filename_template.format(id=self.id, dimension=self.dimension,
                                              scenario=self.scenario)
