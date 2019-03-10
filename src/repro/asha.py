@@ -153,7 +153,8 @@ def register_best_trials(mahler_client, configurator, tags, container, max_epoch
     mean_config = merge(config, mean_args)
 
     print('\nNew trials registered for distribution evaluation:')
-    for name, config in [('min', min_config), ('max', max_config), ('mean', mean_config)]:
+    # for name, config in [('min', min_config), ('max', max_config), ('mean', mean_config)]:
+    for name, config in [('min', min_config)]:
         for i in range(number_of_seeds - existing_trials[name]):
             # This time we want to test error as well.
             config['compute_test_error_rates'] = True
