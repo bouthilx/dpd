@@ -21,7 +21,7 @@ from repro.hpo.base import build_hpo
 logger = logging.getLogger(__name__)
 
 
-run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20BG'}, resumable=True)(train)
+run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB'}, resumable=True)(train)
 
 
 # run needs
