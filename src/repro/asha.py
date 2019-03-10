@@ -245,15 +245,11 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
         mahler_client.close()
         raise SignalSuspend(message)
 
-    if configurator.is_completed():
-        new_best_trials = register_best_trials(
-            mahler_client, configurator, tags, container, max_epochs, max_resource, number_of_seeds)
-        mahler_client.close()
-        return new_best_trials
-
     print("Generating new configurations")
     new_trial_tasks = []
     for i in range(max_workers - n_uncompleted):
+        if configurator.is_completed():
+            break
         config['max_epochs'] = max_epochs
         new_task_config = sample_new_config(configurator, config)
         trial_task = register_new_trial(
@@ -261,6 +257,12 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
         # pprint.pprint(trial_task.to_dict(report=True))
         configurator.observe([trial_task.to_dict(report=True)])
         new_trial_tasks.append(trial_task)
+
+    if configurator.is_completed():
+        new_best_trials = register_best_trials(
+            mahler_client, configurator, tags, container, max_epochs, max_resource, number_of_seeds)
+        mahler_client.close()
+        return new_best_trials
 
     # TODO: We should remove this, there is normally only one create_trial task at a time for a
     #       given set of tags.
