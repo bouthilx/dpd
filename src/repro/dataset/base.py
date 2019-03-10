@@ -17,7 +17,8 @@ def set_data_path(config):
 
 def build_dataset(name=None, **kwargs):
     set_data_path(kwargs)
-    kwargs['num_workers'] = 0
+    # TODO: Put back in after rebuttal
+    # kwargs['num_workers'] = 0
     wrapper = kwargs.pop('wrapper', None)
     data = factories[name](**kwargs)
 
