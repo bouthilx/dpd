@@ -5,6 +5,16 @@ data:
 
 model:
     name: preactresnet101
+    conv:
+        kernel_size: 7
+        stride: 2
+        padding: 3
+    maxpool:
+        kernel_size: 3
+        stride: 2
+        padding: 1
+    avgpool:
+        kernel_size: 4
 
 optimizer:
     name: sgd
