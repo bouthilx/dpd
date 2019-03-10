@@ -25,7 +25,7 @@ setup(
             'torch==1.0.0', 'torchvision', 'torchnet', 'pytorch-ignite', 'tqdm',
             'h5py==2.9.0', 'Pillow==5.3.0', 'filelock==3.0.10',
             'orion.core==db2d068',
-            'orion.algo.skopt==577aabf'],
+            'orion.algo.skopt==71dcdd8'],
         'coco': [
             'cocoex'],
         'mini': [],
@@ -44,11 +44,11 @@ setup(
             ],
     },
     dependency_links=[
-        "git+https://github.com/bouthilx/mahler.git@@83438f1#egg=mahler.core-83438f1",
+        "git+https://github.com/bouthilx/mahler.git@83438f1#egg=mahler.core-83438f1",
         "git+https://github.com/bouthilx/mahler.registry.mongodb.git@87146aa#egg=mahler.registry.mongodb-87146aa",
         "git+https://github.com/bouthilx/mahler.scheduler.flow.git@b6d2d0e#egg=mahler.scheduler.flow-b6d2d0e",
         "git+https://github.com/bouthilx/orion.git@db2d068#egg=orion.core-db2d068",
-        "git+https://gitlab.com/bouthilx/orion.algo.skopt.git@71dcdd8#egg=orion.algo.skopt-71dcdd8",
+        "git+https://github.com/bouthilx/orion.algo.skopt.git@71dcdd8#egg=orion.algo.skopt-71dcdd8",
         "git+https://github.com/bouthilx/flow.git@6354eff#egg=flow-6354eff",
     ],
     setup_requires=['setuptools', 'pytest-runner'],
