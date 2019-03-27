@@ -30,8 +30,7 @@ def build(batch_size, data_path, num_workers):
         data_path, train=False, download=True,
         split='balanced',
         transform=transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))]))
+            transforms.ToTensor()]))
     sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(dataset))))
 
     test_loader = torch.utils.data.DataLoader(
