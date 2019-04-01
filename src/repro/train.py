@@ -16,6 +16,8 @@ import torch.optim
 import yaml
 
 from repro.dataset.base import build_dataset
+from repro.hpo.median_distance_stopping_rule import MedianDistanceStoppingRule
+from repro.log import Logger
 from repro.model.base import (
     build_model, get_checkpoint_file_path, load_checkpoint, save_checkpoint, clear_checkpoint)
 from repro.optimizer.base import build_optimizer
@@ -142,8 +144,8 @@ def main(argv=None):
 
 
 def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
-          patience=None, compute_test_error_rates=False, loading_file_path=None,
-          callback=None):
+          patience=None, grace=5, min_population=3,
+          compute_test_error_rates=False, loading_file_path=None, callback=None):
 
     # Checkpointing file path is named based on Mahler task ID
     checkpointing_file_path = get_checkpoint_file_path()
@@ -177,7 +179,11 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
     evaluators = build_evaluators(trainer, model, device, patience, compute_test_error_rates)
 
+    median_distance_stopping_rule = MedianDistanceStoppingRule(grace, min_population)
+
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
+    
+    metric_logger = Logger()
 
     all_stats = []
     best_stats = {}
@@ -203,7 +209,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
-        seed(seeds['sampler'] + engine.state.epoch)
+        seed(int(seeds['sampler'] + engine.state.epoch))
         model.train()
 
     @trainer.on(Events.EPOCH_COMPLETED)
@@ -224,6 +230,19 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
         if not best_stats or stats['valid']['error_rate'] < best_stats['valid']['error_rate']:
             best_stats.update(stats)
+
+        metric_logger.add_metric(stats)
+
+        try:
+            median_distance_stopping_rule.update(best_stats)
+        except Exception as e:
+            print('Checkpointing before suspending at epoch {}'.format(engine.state.epoch))
+            save_checkpoint(checkpointing_file_path,
+                            model, optimizer, lr_scheduler,
+                            epoch=engine.state.epoch,
+                            iteration=engine.state.iteration,
+                            all_stats=all_stats)
+            raise
 
         all_stats.append(stats)
 
@@ -248,6 +267,9 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
     print("Training")
     trainer.run(dataset['train'], max_epochs=max_epochs)
+
+    median_distance_stopping_rule.thaw()
+    metric_logger.close()
 
     # Remove checkpoint to avoid cluttering the FS.
     clear_checkpoint(checkpointing_file_path)
