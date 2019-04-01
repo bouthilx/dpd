@@ -21,6 +21,37 @@ from repro.hpo.base import build_hpo
 logger = logging.getLogger(__name__)
 
 
+usage = {
+    'lenet': {
+        'gpu': {
+            'memory': 2**30,  # 1 GB
+            'util': 10}},
+    'mobilenetv2': {
+        'gpu': {
+            'memory': 3 * 2**30,  # 1 GB
+            'util': 40}},
+    'vgg11': {
+        'gpu': {
+            'memory': 3 * 2**30,  # 1 GB
+            'util': 40}},
+    'vgg19': {
+        'gpu': {
+            'memory': 4 * 2**30,  # 1 GB
+            'util': 60}},
+    'resnet18': {
+        'gpu': {
+            'memory': 3 * 2**30,  # 1 GB
+            'util': 60}},
+    'resnet101': {
+        'gpu': {
+            'memory': 4 * 2**30,  # 1 GB
+            'util': 60}},
+    'else': {
+        'gpu': {
+            'memory': 4 * 2 ** 30,  # 1 GB
+            'util': 50}}}
+
+
 run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB'}, resumable=True)(train)
 
 
@@ -173,7 +204,12 @@ def register_new_trial(mahler_client, trial_config, tags, container):
     trial_config = copy.deepcopy(trial_config)
     trial_config['model_seed'] = random.uniform(1, 10000)
     trial_config['sampler_seed'] = random.uniform(1, 10000)
-    new_task = mahler_client.register(run.delay(**trial_config), container=container, tags=tags)
+    model_usage = usage.get(trial_config['model']['name'], usage['else'])
+    resources = copy.deepcopy(run.resources)
+    resources['usage'] = model_usage
+    new_task = mahler_client.register(
+        run.delay(**trial_config), container=container, tags=tags,
+        resources=resources)
     print(new_task.id, sorted(new_task.tags))
     return new_task
 
@@ -189,7 +225,8 @@ def sample_new_config(configurator, config):
 #       (should submit based on largest request and enable running small tasks in large resource
 #        workers)
 # @mahler.operator(resources={'cpu':1, 'mem':'1GB'})
-@mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB'})
+@mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB',
+                            'usage': {'gpu': {'memory': 0, 'util': 0}}})
 def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
                  max_epochs, max_workers, max_resource, number_of_seeds):
 
