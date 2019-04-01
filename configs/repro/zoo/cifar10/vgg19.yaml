@@ -1,7 +1,6 @@
 data:
     name: cifar10
     batch_size: 128
-    num_workers: 1
 
 model:
     name: vgg19

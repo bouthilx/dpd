@@ -1,7 +1,6 @@
 data:
     name: svhn
     batch_size: 128
-    num_workers: 5
 
 model:
     name: densenet121

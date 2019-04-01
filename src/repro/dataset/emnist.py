@@ -4,36 +4,14 @@ import torch
 from torchvision import datasets, transforms
 
 
-DATA_SIZE = 100000
+def build(data_path):
 
+    transform = transforms.Compose([transforms.ToTensor()])
 
-def build(batch_size, data_path, num_workers):
+    train_dataset = datasets.EMNIST(data_path, train=True, download=True, split='balanced',
+                                    transform=transform)
 
-    dataset = datasets.EMNIST(
-        data_path, train=True, download=True,
-        split='balanced',
-        transform=transforms.Compose([
-            transforms.ToTensor(),
-            # transforms.Normalize((0.1307,), (0.3081,))]))
-            ]))
-    sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(dataset))))
+    valid_dataset = datasets.EMNIST(data_path, train=False, download=True, split='balanced',
+                                    transform=transform)
 
-    train_loader = torch.utils.data.DataLoader(
-        dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
-
-    sampler = torch.utils.data.sampler.SubsetRandomSampler(range(DATA_SIZE, len(dataset)))
-
-    valid_loader = torch.utils.data.DataLoader(
-        dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
-
-    dataset = datasets.EMNIST(
-        data_path, train=False, download=True,
-        split='balanced',
-        transform=transforms.Compose([
-            transforms.ToTensor()]))
-    sampler = torch.utils.data.sampler.SubsetRandomSampler(range(min(DATA_SIZE, len(dataset))))
-
-    test_loader = torch.utils.data.DataLoader(
-        dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
-
-    return OrderedDict(train=train_loader, valid=valid_loader, test=test_loader)
+    return OrderedDict(dataset=torch.utils.data.ConcatDataset([train_dataset, test_dataset]))
