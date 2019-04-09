@@ -1,5 +1,6 @@
 import bisect
 import pprint
+import time
 
 import scipy.integrate
 
@@ -67,26 +68,26 @@ class MedianDistanceStoppingRule:
         # Compute variance of performances at each epoch across all trials so far.
         mask = (self.metrics >= 0)
         n_points = mask.sum(axis=0)
-        # Ignore epochs where there is less trials than min_population
+        # # Ignore epochs where there is less trials than min_population
         mask *= (n_points > self.min_population)
-        # Set to n_points to on 1 the epochs where there is less trials than min_population to avoid
-        # divbyzero errors
-        n_points = numpy.maximum(mask.sum(axis=0), 1)
-        mean = (self.metrics.sum(axis=0) * mask) / n_points
-        diff = (self.metrics - mean) * mask
-        var = (diff * diff).sum(axis=0) / n_points
+        # # Set to n_points to on 1 the epochs where there is less trials than min_population to
+        # # avoid divbyzero errors
+        # n_points = numpy.maximum(mask.sum(axis=0), 1)
+        # mean = (self.metrics.sum(axis=0) * mask) / n_points
+        # diff = (self.metrics - mean) * mask
+        # var = (diff * diff).sum(axis=0) / n_points
 
-        print(var)
+        # print(var)
         diff = (numpy.max(self.metrics * mask, axis=0) - numpy.min(self.metrics * mask, axis=0))
         var = diff
 
-        print(var)
+        # print(var)
 
         # Compute the cummulative integral of variance over epochs
         # and pick a list of epochs so that all intervals contain the same
         # total amount of variance.
         vcum = scipy.integrate.cumtrapz(var, initial=0)
-        print(vcum)
+        # print(vcum)
         block = vcum[-1] / self.n_steps
         steps = []
         j = 1
@@ -129,7 +130,7 @@ class MedianDistanceStoppingRule:
             return
 
         # This will refresh the trials and metrics at the same time.
-        self.thaw()
+        self.thaw(subset=10)
 
         decisive_epochs = self.get_decisive_steps()
 
@@ -167,6 +168,8 @@ class MedianDistanceStoppingRule:
 
         projection = {'_id': 1, 'registry.reported_on': 1}
 
+        start = time.time()
+
         for trial in self.db_client.tasks.report.find(query, projection):
             trial_id = str(trial['_id'])
             if trial_id in self.trials:
@@ -174,6 +177,12 @@ class MedianDistanceStoppingRule:
 
             self.trials[trial_id] = len(self.trials)
             self.task_timestamp = trial['registry']['reported_on']
+            # If a trial is added, maybe some metrics were loaded but discarded because trial was
+            # not loaded yet. To be safe, fallback metric_timestamp
+            if self.metric_timestamp:
+                self.metric_timestamp = min(self.task_timestamp, self.metric_timestamp)
+
+        print('trial time:', time.time() - start)
 
     def _update_metrics(self):
         query = {'item.type': 'stat'}
@@ -182,6 +191,7 @@ class MedianDistanceStoppingRule:
             query['_id'] = {'$gt': self.metric_timestamp}
 
         projection = {'task_id': 1, 'item.value.epoch': 1, 'item.value.valid.error_rate': 1}
+        start = time.time()
 
         # fetch metrics after timestamp, ignore metric if not in trial ids
         for metric in self.db_client.tasks.metrics.find(query, projection):
@@ -196,8 +206,9 @@ class MedianDistanceStoppingRule:
             self.metrics[metric_key][epoch] = stats['valid']['error_rate']
             min_values = numpy.minimum.accumulate(self.metrics[metric_key][epoch:])
             self.metrics[metric_key][epoch:] = min_values
-            # self.metric_timestamp = metric['_id']
-            self.metric_timestamp = self.task_timestamp
+            self.metric_timestamp = metric['_id']
+
+        print('metric time', time.time() - start)
 
         best_index = numpy.argmin((self.metrics + 10000 * (self.metrics < 0)).min(axis=1))
         self.best = self.metrics[best_index, :]
@@ -215,14 +226,21 @@ class MedianDistanceStoppingRule:
 
         return best, median_distance
 
-    def thaw(self):
+    def thaw(self, subset=None):
         if self.task_id is None:
             return
 
         self.refresh()
         decisive_epochs = self.get_decisive_steps()
         medians = dict()
-        for trial_id, metric_index in self.trials.items():
+        if subset:
+            trial_ids = numpy.random.choice(list(self.trials.keys()), size=subset, replace=False)
+        else:
+            trial_ids = self.trials.keys()
+    
+        # TODO: Compute all based on matrix directly and back-track to trial ids.
+        for trial_id in trial_ids:
+            metric_index = self.trials[trial_id]
             if trial_id == self.task_id:
                 continue
 
@@ -252,8 +270,10 @@ class MedianDistanceStoppingRule:
             trial_value = trial_metrics[decisive_epoch]
             median_distance = medians[decisive_epoch][1]
             distance = abs(medians[decisive_epoch][0] - trial_value)
-            if distance <= median_distance:
-                message = 'Distance <= median. (epoch:{}, dist:{}, median: {})'.format(
+            # Deliberately avoid = median to limit unstability
+            # (if one trial moves around median it would get suspended and resumed very often)
+            if distance < median_distance:
+                message = 'Distance < median. (epoch:{}, dist:{}, median: {})'.format(
                     decisive_epoch, distance, median_distance)
                 self._resume(trial_id, message)
 
@@ -263,6 +283,7 @@ class MedianDistanceStoppingRule:
             return
         try:
             print(task.id, task.status)
+            print(message)
             self.mahler_client.resume(task, message)
         except (ValueError, RaceCondition):
             pass
