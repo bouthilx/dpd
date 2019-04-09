@@ -166,7 +166,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
         model_seed=model_seed, sampler_seed=sampler_seed)
 
     if lr_scheduler is None and patience is None:
-        patience = 10
+        patience = 20
     elif patience is None:
         patience = lr_scheduler.patience * 2
 

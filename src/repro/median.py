@@ -94,6 +94,7 @@ def sample_new_config(space, config, hpo_seed, global_seed):
     params['optimizer']['lr_scheduler'] = dict(patience=10)
     params['model_seed'] = global_seed
     params['sampler_seed'] = global_seed
+    params['patience'] = 30
     # Params can be all
     new_config = merge(config, params)
     new_config['data']['seed'] = global_seed
