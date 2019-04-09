@@ -170,9 +170,13 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
     elif patience is None:
         patience = lr_scheduler.patience * 2
 
+    print("\n\nMax epochs: {}\n\n".format(max_epochs))
+
     print("\n\nEarly stopping with patience: {}\n\n".format(patience))
 
     timer = Timer(average=True)
+
+    stopping_timer = Timer(average=True)
 
     trainer = create_supervised_trainer(
         model, optimizer, torch.nn.functional.cross_entropy, device=device)
@@ -182,7 +186,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
     median_distance_stopping_rule = MedianDistanceStoppingRule(grace, min_population)
 
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
-    
+
     metric_logger = Logger()
 
     all_stats = []
@@ -209,6 +213,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
+        print(seeds['sampler'] + engine.state.epoch)
         seed(int(seeds['sampler'] + engine.state.epoch))
         model.train()
 
@@ -231,11 +236,32 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
         if not best_stats or stats['valid']['error_rate'] < best_stats['valid']['error_rate']:
             best_stats.update(stats)
 
-        metric_logger.add_metric(stats)
+        # TODO: load all tasks with the same tags in mahler, compute the error_rate at that point
+        #       (compare median of best error_rates up to that point vs this best_stats
+        #       if below median, suspend
+        #       maybe, interrupt and increase priority, or not... Because we would need to wait for
+        #       it to completed anyway
+        #       Grace period? Like 60 epochs? :/
+        #       Or reduce quantile as time grows (stop worst 95th quantile at 10 epochs, 50th at
+        #       100, 75th at 150 and so on...) Meh to much novelty.
+        #       min trials at that point?
+        #       or interrupt after each 10/20 epochs, so that number of trials is quickly high
+        #       but that means we need a way to log results during execution, not just output.
 
+        # No need for this, it is logged in median_stopping_rule
+        # metric_logger.add_metric(stats)
+
+        print(("Epoch {:>4} Iteration {:>12} Loss {:>8.3f} "
+               "Best-Valid-ER {:>8.4f} Time {:>8.3f}").format(
+            engine.state.epoch, engine.state.iteration, engine.state.output,
+            best_stats['valid']['error_rate'], timer.value()))
+
+        stopping_timer.reset()
         try:
-            median_distance_stopping_rule.update(best_stats)
-        except Exception as e:
+            median_distance_stopping_rule.update(stats)
+            print('Stopping computation time {:>8.3f}'.format(stopping_timer.value()))
+        except Exception:
+            print('Stopping computation time {:>8.3f}'.format(stopping_timer.value()))
             print('Checkpointing before suspending at epoch {}'.format(engine.state.epoch))
             save_checkpoint(checkpointing_file_path,
                             model, optimizer, lr_scheduler,
@@ -245,11 +271,6 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
             raise
 
         all_stats.append(stats)
-
-        print(("Epoch {:>4} Iteration {:>12} Loss {:>8.3f} "
-               "Best-Valid-ER {:>8.4f} Time {:>8.3f}").format(
-            engine.state.epoch, engine.state.iteration, engine.state.output,
-            best_stats['valid']['error_rate'], timer.value()))
 
         # TODO: Checkpoint lr_scheduler as well
         if (datetime.utcnow() - engine.state.last_checkpoint).total_seconds() > TIME_BUFFER:
