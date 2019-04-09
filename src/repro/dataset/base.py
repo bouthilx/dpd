@@ -1,4 +1,7 @@
 import os
+
+import numpy
+
 import torch
 
 from repro.utils.factory import fetch_factories
@@ -33,7 +36,7 @@ def generate_indices(n_points, seed=None):
     return dict(train=train_indices, valid=valid_indices, test=test_indices)
 
 
-def split_data(dataset, batch_size, seed):
+def split_data(dataset, batch_size, seed, num_workers=0):
 
     indices = generate_indices(len(dataset), seed)
 
@@ -41,17 +44,19 @@ def split_data(dataset, batch_size, seed):
     for split_name, split_indices in indices.items():
         sampler = torch.utils.data.sampler.SubsetRandomSampler(split_indices)
         data_loaders[split_name] = torch.utils.data.DataLoader(
-            dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=0)
+            dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
 
     return data_loaders
  
  
-def build_dataset(name, batch_size, seed=None, **kwargs):
+def build_dataset(name, batch_size, seed=None, num_workers=0, **kwargs):
     set_data_path(kwargs)
     wrapper = kwargs.pop('wrapper', None)
     data = factories[name](**kwargs)
 
-    data.update(split_data(data.pop('dataset'), batch_size=batch_size, seed=seed))
+    splitted_data = split_data(data.pop('dataset'), batch_size=batch_size, seed=seed,
+                               num_workers=num_workers)
+    data.update(splitted_data)
 
     if 'input_size' not in data or 'num_classes' not in data:
         # Get one batch
