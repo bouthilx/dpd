@@ -52,7 +52,7 @@ USAGE = {
             'util': 50}}}
 
 
-run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB'}, resumable=True)(train)
+run = mahler.operator(resources={'cpu': 6, 'gpu': 1, 'mem': '25GB'}, resumable=True)(train)
 
 # run needs
 # data, model, optimizer, model_seed, sampler_seed, max_epochs
@@ -104,7 +104,7 @@ def sample_new_config(space, config, hpo_seed, global_seed):
 # TODO: Support resources properly
 #       (should submit based on largest request and enable running small tasks in large resource
 #        workers)
-@mahler.operator(resources={'cpu': 1, 'mem': '1GB', 'usage': {'gpu': {'memory': 0, 'util': 0}}})
+@mahler.operator(resources={'cpu': 6, 'mem': '1GB', 'gpu': 1, 'usage': {'gpu': {'memory': 0, 'util': 0}}})
 def create_trial(config_dir_path, dataset_name, model_name,
                  grace, min_population,
                  max_epochs, n_trials, bootstrap, seed):
