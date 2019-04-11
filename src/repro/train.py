@@ -16,7 +16,7 @@ import torch.optim
 import yaml
 
 from repro.dataset.base import build_dataset
-from repro.hpo.median_distance_stopping_rule import MedianDistanceStoppingRule
+from repro.hpo.afp import AsynchronousFilteringPercentile
 from repro.log import Logger
 from repro.model.base import (
     build_model, get_checkpoint_file_path, load_checkpoint, save_checkpoint, clear_checkpoint)
@@ -144,8 +144,11 @@ def main(argv=None):
 
 
 def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
-          patience=None, grace=5, min_population=3,
+          patience=None, stopping_rule=None,
           compute_test_error_rates=False, loading_file_path=None, callback=None):
+
+    if stopping_rule is None:
+        stopping_rule = {}
 
     # Checkpointing file path is named based on Mahler task ID
     checkpointing_file_path = get_checkpoint_file_path()
@@ -183,7 +186,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
     evaluators = build_evaluators(trainer, model, device, patience, compute_test_error_rates)
 
-    median_distance_stopping_rule = MedianDistanceStoppingRule(grace, min_population)
+    stopping_rule = AsynchronousFilteringPercentile(**stopping_rule)
 
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
 
@@ -258,7 +261,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
         stopping_timer.reset()
         try:
-            median_distance_stopping_rule.update(stats)
+            stopping_rule.update(stats)
             print('Stopping computation time {:>8.3f}'.format(stopping_timer.value()))
         except Exception:
             print('Stopping computation time {:>8.3f}'.format(stopping_timer.value()))
@@ -289,7 +292,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
     print("Training")
     trainer.run(dataset['train'], max_epochs=max_epochs)
 
-    median_distance_stopping_rule.thaw()
+    stopping_rule.thaw()
     metric_logger.close()
 
     # Remove checkpoint to avoid cluttering the FS.

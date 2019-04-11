@@ -61,8 +61,14 @@ def main(argv=None):
         '--stopping-grace', default=5, type=int,
         help='Min epochs before starting median stopping')
     parser.add_argument(
-        '--stopping-min-population', default=3, type=int,
+        '--final-population', default=3, type=int,
         help='Min trials at epoch t to consider median stopping')
+    parser.add_argument(
+        '--stopping-n-steps', default=30, type=int,
+        help='Number of steps where trials are stopped')
+    parser.add_argument(
+        '--stopping-window-size', default=11, type=int,
+        help='Window width to smooth curves.')
     parser.add_argument(
         '--config-dir-path',
         default=DEFAULT_CONFIG_DIR_PATH,
@@ -99,10 +105,14 @@ def main(argv=None):
                 config_dir_path=options.config_dir_path,
                 dataset_name=dataset_name,
                 model_name=model_name,
-                grace=options.stopping_grace,
-                min_population=options.stopping_min_population,
                 max_epochs=options.max_epochs,
                 n_trials=options.n_trials,
+                stopping_rule=dict(
+                    initial_population=options.n_trials,
+                    final_population=options.final_population,
+                    n_steps=options.stopping_n_steps,
+                    window_size=options.stopping_window_size,
+                    n_points=options.max_epochs),
                 bootstrap=dict(
                     n_bootstraps=options.n_bootstraps,
                     n_data_sampling=options.n_data_sampling,

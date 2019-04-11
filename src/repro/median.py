@@ -106,8 +106,7 @@ def sample_new_config(space, config, hpo_seed, global_seed):
 #        workers)
 @mahler.operator(resources={'cpu': 6, 'mem': '1GB', 'gpu': 1, 'usage': {'gpu': {'memory': 0, 'util': 0}}})
 def create_trial(config_dir_path, dataset_name, model_name,
-                 grace, min_population,
-                 max_epochs, n_trials, bootstrap, seed):
+                 max_epochs, n_trials, stopping_rule, bootstrap, seed):
 
     usage = USAGE[model_name]
 
@@ -132,8 +131,7 @@ def create_trial(config_dir_path, dataset_name, model_name,
         DimensionBuilder().build('optimizer.weight_decay', 'loguniform(1e-8, 1e-3)'))
 
     config = load_config(config_dir_path, dataset_name, model_name)
-    config['grace'] = grace
-    config['min_population'] = min_population
+    config['stopping_rule'] = stopping_rule
 
     n_broken = 0
     prev_trials = list(mahler_client.find(tags=tags + [run.name, 'hpo'], _return_doc=True,
