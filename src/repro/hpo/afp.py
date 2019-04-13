@@ -135,8 +135,8 @@ class AsynchronousFilteringPercentile:
         if epoch < decisive_epochs[0]:
             return
 
-        idx = bisect.bisect_left(decisive_epochs, epoch)
-        decisive_epochs = decisive_epochs[:min(idx, len(decisive_epochs) - 1)]
+        idx = max(bisect.bisect(decisive_epochs, epoch), 1)
+        decisive_epochs = decisive_epochs[:idx]
 
         last_population = None
 
@@ -277,13 +277,15 @@ class AsynchronousFilteringPercentile:
             # if last_epoch < 1:
             #     self._resume(trial_id, 'Should not be suspended before epoch 1')
             #     continue
-
-            idx = bisect.bisect_left(decisive_epochs, last_epoch)
-            decisive_epoch = decisive_epochs[min(idx, len(decisive_epochs) - 1)]
+    
+            idx = max(bisect.bisect(decisive_epochs, last_epoch), 1)
+            decisive_epoch = decisive_epochs[min(idx, len(decisive_epochs)) - 1]
 
             if last_epoch < decisive_epoch:
-                message = 'Should not be suspended before epoch {}. (Was {})'.format(
-                    decisive_epoch, last_epoch)
+                # TODO: make sure this is ok. There seems to be a bug as many many gets thawed this
+                # way.
+                message = 'Should not be suspended before epoch {}. (Was {}) ({})'.format(
+                    decisive_epoch, last_epoch, str(decisive_epochs))
                 self._resume(trial_id, message)
                 continue
 
