@@ -34,7 +34,7 @@ def removeOutliers(x, outlierConstant):
 class AsynchronousFilteringPercentile:
 
     def __init__(self, initial_population, final_population, n_steps=30, window_size=11,
-                 n_points=200, min_population=3, population_growth_brake=1):
+                 n_points=200, min_population=3, population_growth_brake=0.5):
 
         self.initial_population = initial_population
         self.final_population = final_population
@@ -273,22 +273,27 @@ class AsynchronousFilteringPercentile:
             epoch = stats['epoch']
 
             self.metrics[metric_key][epoch] = stats['valid']['error_rate']
+            # Note, this will fail if some epochs are missing in metrics and have default -1
+            if epoch > 1:
+                self.smooth_metrics[metric_key][epoch] = self.metrics[metric_key][1:epoch + 1].min()
+            else:
+                self.smooth_metrics[metric_key][epoch] = self.metrics[metric_key][epoch]
             # min_values = numpy.minimum.accumulate(self.metrics[metric_key][epoch:])
             # self.metrics[metric_key][epoch:] = min_values
 
             # +1 to compensate for missing epoch 0
-            n_points = (self.metrics[metric_key] >= 0).sum() + 1
-            a = max(epoch - self.padding, 1)
-            effective_padding = epoch - a
-            b = min(epoch + effective_padding + 1, n_points)
+            # n_points = (self.metrics[metric_key] >= 0).sum() + 1
+            # a = max(epoch - self.padding, 1)
+            # effective_padding = epoch - a
+            # b = min(epoch + effective_padding + 1, n_points)
 
-            # TODO: Compute all this afterwards using vector computations in numpy
-            for o_epoch in range(a, b):
-                a = max(o_epoch - self.padding, 1)
-                effective_padding = o_epoch - a
-                b = min(o_epoch + effective_padding + 1, n_points)
+            # # TODO: Compute all this afterwards using vector computations in numpy
+            # for o_epoch in range(a, b):
+            #     a = max(o_epoch - self.padding, 1)
+            #     effective_padding = o_epoch - a
+            #     b = min(o_epoch + effective_padding + 1, n_points)
 
-                self.smooth_metrics[metric_key][o_epoch] = self.metrics[metric_key][a:b].mean()
+            #     self.smooth_metrics[metric_key][o_epoch] = self.metrics[metric_key][a:b].mean()
 
             self.metric_timestamp = metric['_id']
 
@@ -333,7 +338,7 @@ class AsynchronousFilteringPercentile:
             # if last_epoch < 1:
             #     self._resume(trial_id, 'Should not be suspended before epoch 1')
             #     continue
-    
+
             idx = max(bisect.bisect(decisive_epochs, last_epoch) - 1, 0)
             decisive_epoch = decisive_epochs[idx]
 
@@ -343,21 +348,21 @@ class AsynchronousFilteringPercentile:
                 self._resume(trial_id, message)
                 continue
 
-            if decisive_epoch not in percentiles:
-                percentiles[decisive_epoch] = self.fetch_results(decisive_epoch)
+            if last_epoch not in percentiles:
+                percentiles[last_epoch] = self.fetch_results(last_epoch)
 
-            if percentiles[decisive_epoch][0] is None:
+            if percentiles[last_epoch][0] is None:
                 continue
 
-            trial_value = trial_metrics[decisive_epoch]
-            percentile, population = percentiles[decisive_epoch]
+            trial_value = trial_metrics[last_epoch]
+            percentile, population = percentiles[last_epoch]
             # Deliberately avoid = median to limit unstability
             # (if one trial moves around median it would get suspended and resumed very often)
             population_at_step = self.initial_population * (self.ratio) ** (idx + 1)
             enough_population = population >= population_at_step * self.population_growth_brake
             if trial_value < percentile and enough_population:
                 population_message = '{} >= {} ({} * {} * {} ** {})'.format(
-                    population, population_at_step * self.population_growth_brake, 
+                    population, population_at_step * self.population_growth_brake,
                     self.population_growth_brake, self.initial_population, self.ratio, idx + 1)
                 message = 'value({}) < percentile({}) at epoch({}) with population({})'.format(
                     trial_value, percentile, decisive_epoch, population_message)
