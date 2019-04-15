@@ -104,9 +104,10 @@ def sample_new_config(space, config, hpo_seed, global_seed):
 # TODO: Support resources properly
 #       (should submit based on largest request and enable running small tasks in large resource
 #        workers)
-@mahler.operator(resources={'cpu': 6, 'mem': '25GB', 'gpu': 1, 'usage': {'gpu': {'memory': 0, 'util': 0}}})
+@mahler.operator(resources={'cpu': 6, 'mem': '25GB', 'gpu': 1,
+                            'usage': {'gpu': {'memory': 0, 'util': 0}}})
 def create_trial(config_dir_path, dataset_name, model_name,
-                 max_epochs, n_trials, stopping_rule, bootstrap, seed):
+                 max_epochs, n_trials, stopping_rule, seed, variance_samples):
 
     usage = USAGE[model_name]
 
@@ -174,8 +175,11 @@ def create_trial(config_dir_path, dataset_name, model_name,
     print("Generating new configurations")
     for i in range(max(n_trials - len(trials), 0)):
         config['max_epochs'] = max_epochs
+        # Use variances_samples[seed] for exp seed so that first exp in
+        # variance trials matches the seed of hpo trials.
         new_task_config = sample_new_config(
-            space, config, hpo_seed=int(seeds[len(trials) - 1]), global_seed=seed)
+            space, config, hpo_seed=int(seeds[len(trials) - 1]),
+            global_seed=variance_samples['seed'])
         new_task = run.delay(**new_task_config)
         mahler_client.register(new_task, container=container, tags=tags + ['hpo'],
                                resources={'usage': usage})
@@ -183,12 +187,15 @@ def create_trial(config_dir_path, dataset_name, model_name,
 
     # draw bootstrap samples, if any is all completed, register seeds
     assert len(trials) == n_trials
+    print('Done.')
 
-    while not draw_bootstrap_samples(mahler_client, tags, container, trials, seed, **bootstrap):
+    while not draw_variance_samples(mahler_client, tags, container, trials, **variance_samples):
         print('Waiting 5 mins for trials to complete')
         sys.stdout.flush()
         sys.stderr.flush()
         time.sleep(60 * 5)
+
+    print('Experiment generation completed.')
 
     mahler_client.close()
 
@@ -213,71 +220,54 @@ def create_trial(config_dir_path, dataset_name, model_name,
 #           - Verify that it is reproducible
 #           - Compare with f32 results
 
-def draw_bootstrap_samples(mahler_client, tags, container, trials, seed, n_bootstraps,
-                           n_data_sampling, n_var_sampling):
+def draw_variance_samples(mahler_client, tags, container, trials, seed,
+                          n_data_sampling, n_var_sampling):
     # From trials, sample batches
     # For each batch, test if all trials completed, if not, skip
     # if batch seeding < max_seed: sample
     # if all batches seeding >= max_seed: return True
 
-    samples = []
-    n_trials = len(trials)
-    bootstrap_size = int(n_trials / n_bootstraps)
-
-    indices = list(range(n_trials))
-    rng = numpy.random.RandomState(seed)
-    rng.shuffle(indices)
-    for i in range(0, n_trials, bootstrap_size):
-        sample = dict(
-            indexes=indices[i:i + bootstrap_size],
-            seed=rng.randint(1, 1000000))
-        assert len(sample['indexes']) == bootstrap_size
-        samples.append(sample)
-
     completed = True
-    for batch_index, bootstrap_sample in enumerate(samples):
-        skip = False
-        # batch_priority = -(n_bootstraps - batch_index)
-        bootstrap_trials = [trials[index] for index in bootstrap_sample['indexes']]
-        for trial in bootstrap_trials:
-            if trial.status.name not in ['Completed', 'Suspended']:
-                skip = True
-                # Increase priority (the smaller, the highest priority, like `nice`)
-                # if trial.priority > batch_priority:
-                #     mahler_client.update_priority(trial, batch_priority)
-
-        if skip:
-            logger.debug('Bootstrap sample {} have non completed trials'.format(batch_index))
+    for trial in trials:
+        if trial.status.name not in ['Completed', 'Suspended']:
             completed = False
-            continue
 
-        params = get_best_params(
-            mahler_client, batch_index, bootstrap_trials)
+    if not completed:
+        return False
 
-        params['compute_test_error_rates'] = True
+    params = get_best_params(
+        mahler_client, trials)
 
-        memory = 0
-        total_mem_used = 0
-        util = 0
-        for usage in bootstrap_trials[0].metrics['usage']:
-            if usage['gpu']['memory']['process']['max'] > memory:
-                memory = usage['gpu']['memory']['process']['max']
-                total_mem_used = usage['gpu']['memory']['used']['max']
-                util = usage['gpu']['util']['mean']
+    params['compute_test_error_rates'] = True
 
-        if total_mem_used == 0.:
-            util = 0
-        else:
-            util = int(memory / total_mem_used * util + 0.5)
+    usage = get_usage(trials[0])
 
-        usage = {'gpu': {'memory': memory, 'util': util}}
-
-        print('Generating trials for bootstrap {}'.format(batch_index))
-        sample_distrib(
-            mahler_client, tags, container, batch_index, seed, params, usage,
-            n_data_sampling, n_var_sampling)
+    print('Generating trials for variance estimation.')
+    sample_distrib(
+        mahler_client, tags, container, seed, params, usage,
+        n_data_sampling, n_var_sampling)
+    print('Done')
 
     return completed
+
+
+def get_usage(trial):
+    memory = 0
+    total_mem_used = 0
+    util = 0
+    for usage in trial.metrics['usage']:
+        if usage['gpu']['memory']['process']['max'] > memory:
+            memory = usage['gpu']['memory']['process']['max']
+            total_mem_used = usage['gpu']['memory']['used']['max']
+            util = usage['gpu']['util']['mean']
+
+    if total_mem_used == 0.:
+        util = 0
+    else:
+        util = int(memory / total_mem_used * util + 0.5)
+
+    usage = {'gpu': {'memory': memory, 'util': util}}
+    return usage
 
 
 # Config
@@ -294,17 +284,12 @@ def draw_bootstrap_samples(mahler_client, tags, container, trials, seed, n_boots
 #         var_sampling: 10
 
 
-def get_best_params(mahler_client, batch_index, trials):
+def get_best_params(mahler_client, trials):
 
     best_trial = None
     best_objective = float('inf')
 
     for trial in trials:
-        tag = 'b-{}'.format(batch_index)
-        # Check beforehand to avoid fetching the tags for testing
-        if tag not in trial.tags:
-            mahler_client.add_tags(trial, [tag])
-
         if trial.status.name == 'Suspended':
             continue
 
@@ -319,12 +304,12 @@ def get_best_params(mahler_client, batch_index, trials):
     return None
 
 
-def sample_distrib(mahler_client, tags, container, batch_index, seed, params, usage,
+def sample_distrib(mahler_client, tags, container, seed, params, usage,
                    n_data_sampling, n_var_sampling):
     # if batch seeding < max_seed: sample
     # if all batches seeding >= max_seed: return True
 
-    batch_tags = ['distrib', 'b-{}'.format(batch_index)]
+    batch_tags = ['distrib', 'seed-{}'.format(seed)]
 
     projection = {'registry.tags': 1, 'arguments.model_seed': 1, 'arguments.data.seed': 1}
 
@@ -367,6 +352,8 @@ def sample_distrib(mahler_client, tags, container, batch_index, seed, params, us
             params['sampler_seed'] = var_seed
             params['model_seed'] = var_seed
             params['data']['seed'] = data_seed
+
+            params['stopping_rule'] = None
 
             # priority = -(max_var_sampling - j)
             distrib[data_seed][var_seed] = mahler_client.register(

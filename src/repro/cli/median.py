@@ -52,17 +52,17 @@ def main(argv=None):
         '--n-var-sampling', default=10, type=int,
         help='Number of init+data-order sampling per data sampling.')
     parser.add_argument(
-        '--seed', default=1, type=int,
-        help='Base seed for the entire process.')
+        '--hpo-seed', default=1, type=int,
+        help='Seed for the random search sampling.')
+    parser.add_argument(
+        '--variance-seed', default=1, type=int,
+        help='Seed for the variance estimation samples.')
     parser.add_argument(
         '--force', action='store_true', default=False,
         help='Register even if another similar task already exists')
     parser.add_argument(
-        '--stopping-grace', default=5, type=int,
-        help='Min epochs before starting median stopping')
-    parser.add_argument(
-        '--final-population', default=3, type=int,
-        help='Min trials at epoch t to consider median stopping')
+        '--final-population', default=5, type=int,
+        help='Final population reaching end of training.')
     parser.add_argument(
         '--stopping-n-steps', default=30, type=int,
         help='Number of steps where trials are stopped')
@@ -79,12 +79,6 @@ def main(argv=None):
         '--debug', action='store_true', default=False, help='Deploy small setup for debugging.')
 
     options = parser.parse_args(argv)
-
-    # TODO: Verify that n_boostrap is a divider of max_trials
-    if options.n_trials % options.n_bootstraps != 0:
-        print("Error: n-bootstrap ({}) is not a divider of n-trials ({})".format(
-            options.n_trials, options.n_bootstraps))
-        sys.exit(2)
 
     mahler_client = mahler.Client()
 
@@ -113,11 +107,11 @@ def main(argv=None):
                     n_steps=options.stopping_n_steps,
                     window_size=options.stopping_window_size,
                     n_points=options.max_epochs),
-                bootstrap=dict(
-                    n_bootstraps=options.n_bootstraps,
+                variance_samples=dict(
+                    seed=options.variance_seed,
                     n_data_sampling=options.n_data_sampling,
                     n_var_sampling=options.n_var_sampling),
-                seed=options.seed),
+                seed=options.hpo_seed),
             container=options.container, tags=tags)
 
 

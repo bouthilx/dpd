@@ -186,7 +186,8 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
     evaluators = build_evaluators(trainer, model, device, patience, compute_test_error_rates)
 
-    stopping_rule = AsynchronousFilteringPercentile(**stopping_rule)
+    if stopping_rule:
+        stopping_rule = AsynchronousFilteringPercentile(**stopping_rule)
 
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
 
@@ -212,7 +213,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
             engine.state.epoch = 0
             engine.state.iteration = 0
             engine.state.output = 0.0
-            trainer_save_checkpoint(engine)
+            # trainer_save_checkpoint(engine)
 
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
@@ -251,27 +252,27 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
         #       or interrupt after each 10/20 epochs, so that number of trials is quickly high
         #       but that means we need a way to log results during execution, not just output.
 
-        # No need for this, it is logged in median_stopping_rule
-        # metric_logger.add_metric(stats)
-
         print(("Epoch {:>4} Iteration {:>12} Loss {:>8.3f} "
                "Best-Valid-ER {:>8.4f} Time {:>8.3f}").format(
             engine.state.epoch, engine.state.iteration, engine.state.output,
             best_stats['valid']['error_rate'], timer.value()))
 
-        stopping_timer.reset()
-        try:
-            stopping_rule.update(stats)
-            print('Stopping computation time {:>8.3f}'.format(stopping_timer.value()))
-        except Exception:
-            print('Stopping computation time {:>8.3f}'.format(stopping_timer.value()))
-            print('Checkpointing before suspending at epoch {}'.format(engine.state.epoch))
-            save_checkpoint(checkpointing_file_path,
-                            model, optimizer, lr_scheduler,
-                            epoch=engine.state.epoch,
-                            iteration=engine.state.iteration,
-                            all_stats=all_stats)
-            raise
+        if stopping_rule:
+            stopping_timer.reset()
+            try:
+                stopping_rule.update(stats)
+                print('Stopping computation time {:>8.3f}'.format(stopping_timer.value()))
+            except Exception:
+                print('Stopping computation time {:>8.3f}'.format(stopping_timer.value()))
+                print('Checkpointing before suspending at epoch {}'.format(engine.state.epoch))
+                save_checkpoint(checkpointing_file_path,
+                                model, optimizer, lr_scheduler,
+                                epoch=engine.state.epoch,
+                                iteration=engine.state.iteration,
+                                all_stats=all_stats)
+                raise
+        else:
+            metric_logger.add_metric(stats)
 
         all_stats.append(stats)
 
@@ -292,7 +293,8 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
     print("Training")
     trainer.run(dataset['train'], max_epochs=max_epochs)
 
-    stopping_rule.thaw()
+    if stopping_rule:
+        stopping_rule.thaw()
     metric_logger.close()
 
     # Remove checkpoint to avoid cluttering the FS.
