@@ -52,7 +52,7 @@ def main(argv=None):
         '--n-var-sampling', default=10, type=int,
         help='Number of init+data-order sampling per data sampling.')
     parser.add_argument(
-        '--hpo-seed', default=1, type=int,
+        '--hpo-seed', default=[1], type=int, nargs='*',
         help='Seed for the random search sampling.')
     parser.add_argument(
         '--variance-seed', default=1, type=int,
@@ -84,9 +84,9 @@ def main(argv=None):
 
     # for i in range(options.num_workers):
     setup_combinations = itertools.product(
-        options.datasets, options.models)
-    for dataset_name, model_name in setup_combinations:
-        tags = options.tags + ['hpo-seed-{}'.format(options.hpo_seed), dataset_name, model_name,
+        options.datasets, options.models, options.hpo_seed)
+    for dataset_name, model_name, hpo_seed in setup_combinations:
+        tags = options.tags + ['hpo-seed-{}'.format(hpo_seed), dataset_name, model_name,
                                'repro', 'median']
 
         if any(True for _ in mahler_client.find(tags=tags + [run.name])) and not options.force:
@@ -112,7 +112,7 @@ def main(argv=None):
                     seed=options.variance_seed,
                     n_data_sampling=options.n_data_sampling,
                     n_var_sampling=options.n_var_sampling),
-                seed=options.hpo_seed),
+                seed=hpo_seed),
             container=options.container, tags=tags)
 
 
