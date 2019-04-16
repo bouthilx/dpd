@@ -27,6 +27,6 @@ class Logger:
     
     def add_metric(self, stats):
         if self.mahler_client:
-            self.mahler_client.add_metric(self.task_id, stats)
+            self.mahler_client.add_metric(self.task_id, stats, force=True)
         else:
             pprint.pprint(stats)
