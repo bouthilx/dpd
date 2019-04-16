@@ -227,12 +227,18 @@ def draw_variance_samples(mahler_client, tags, container, trials, seed,
     # if batch seeding < max_seed: sample
     # if all batches seeding >= max_seed: return True
 
-    completed = True
+    completed = 0
+    suspended = 0
     for trial in trials:
-        if trial.status.name not in ['Completed', 'Suspended']:
-            completed = False
+        completed += int(trial.status.name == 'Completed')
+        suspended += int(trial.status.name == 'Suspended')
 
-    if not completed:
+    if completed + suspended < len(trials):
+        return False
+
+    if completed == 0:
+        for trial in trials:
+            mahler_client.resume(trial, 'All trials are suspended')
         return False
 
     params = get_best_params(

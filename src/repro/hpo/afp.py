@@ -208,8 +208,9 @@ class AsynchronousFilteringPercentile:
         # TODO: Limiting progression to having giving lot of time to bad trials at beginning
         #       This brake can be adjusted with self.population_growth_brake
         if population < population_at_step * self.population_growth_brake: #  and not population_is_soon_enough:
+            self.thaw()
             message = 'Population too small: {} < {} ({} * {} * {} ** {})'.format(
-                population, population_at_step * self.population_growth_brake, 
+                population, population_at_step * self.population_growth_brake,
                 self.population_growth_brake, self.initial_population, self.ratio, idx + 1)
             raise SignalSuspend(message)
         elif percentile is None:
@@ -220,6 +221,7 @@ class AsynchronousFilteringPercentile:
         decisive_value = self.smooth_metrics[self.trials[str(self.task.id)], decisive_epoch]
         print(decisive_value)
         if decisive_value > percentile:
+            self.thaw()
             message = 'value({}) > percentile({}) at epoch({}) with population({})'.format(
                 decisive_value, percentile, decisive_epoch, population)
             raise SignalSuspend(message)
