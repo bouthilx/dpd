@@ -177,21 +177,29 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
     print("\n\nEarly stopping with patience: {}\n\n".format(patience))
 
+    print('Building timers, training and evaluation loops...')
     timer = Timer(average=True)
 
+    print('    Stopping timer')
     stopping_timer = Timer(average=True)
 
+    print('    Training loop')
     trainer = create_supervised_trainer(
         model, optimizer, torch.nn.functional.cross_entropy, device=device)
 
+    print('    Evaluator loop')
     evaluators = build_evaluators(trainer, model, device, patience, compute_test_error_rates)
 
+    print('    Stopping rule')
     if stopping_rule:
         stopping_rule = AsynchronousFilteringPercentile(**stopping_rule)
 
+    print('    Set timer events')
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
 
+    print('    Metric logger')
     metric_logger = Logger()
+    print('Done')
 
     all_stats = []
     best_stats = {}
