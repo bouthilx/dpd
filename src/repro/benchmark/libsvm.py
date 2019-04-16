@@ -347,6 +347,7 @@ class Problem:
         plt.clf()
 
 
-def build(datasets=None, dataset_folds=None, processings=None, scenarios=None, previous_tags=None,
-          warm_start=None, **kwargs):
-    return LIBSVMBenchmark(datasets, dataset_folds, processings, scenarios, previous_tags, warm_start)
+if etree is not None:
+    def build(datasets=None, dataset_folds=None, processings=None, scenarios=None, previous_tags=None,
+              warm_start=None, **kwargs):
+        return LIBSVMBenchmark(datasets, dataset_folds, processings, scenarios, previous_tags, warm_start)

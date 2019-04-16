@@ -122,7 +122,7 @@ class Problem:
         tags = ['coco',
                 'f{:03d}'.format(self.id), 'd{:03d}'.format(self.dimension),
                 'i{:02d}'.format(self.instance_id),
-                's-{}'.format(self.scenario)]
+                's-{}'.format(self.scenario),
                 'm-{}'.format(self.warm_start)]
         if self.previous_tags:
             tags += ['pv-{}'.format(tag) for tag in self.previous_tags]
