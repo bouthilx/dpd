@@ -19,16 +19,18 @@ setup(
     author_email='Xavier Bouthillier, Cesar Laurent, Simon Guiroy',
     package_dir={'': 'src'},
     packages=find_namespace_packages('src'),
-    install_requires=[],
+    install_requires=[
+        'orion.core',
+        'orion.algo.skopt', 'tqdm'],
     extras_require = {
-        'execute':  [
-            'torch==1.0.0', 'torchvision', 'torchnet', 'pytorch-ignite', 'tqdm',
-            'h5py==2.9.0', 'Pillow==5.3.0', 'filelock==3.0.10',
-            'orion.core==db2d068',
-            'orion.algo.skopt==577aabf'],
         'coco': [
             'cocoex'],
-        'mini': [],
+        'libsvm': [
+            'lxml'
+            ],
+        'mini': [
+            'torch==1.0.0', 'torchvision', 'torchnet', 'pytorch-ignite',
+            'filelock==3.0.10', 'h5py==2.9.0'],
         'deploy': [
             'mahler.core==83438f1',
             'mahler.registry.mongodb==87146aa',
@@ -48,7 +50,7 @@ setup(
         "git+https://github.com/bouthilx/mahler.registry.mongodb.git@87146aa#egg=mahler.registry.mongodb-87146aa",
         "git+https://github.com/bouthilx/mahler.scheduler.flow.git@b6d2d0e#egg=mahler.scheduler.flow-b6d2d0e",
         "git+https://github.com/bouthilx/orion.git@db2d068#egg=orion.core-db2d068",
-        "git+https://gitlab.com/bouthilx/orion.algo.skopt.git@71dcdd8#egg=orion.algo.skopt-71dcdd8",
+        "git+https://gitlab.com/bouthilx/orion.algo.skopt.git@577aabf#egg=orion.algo.skopt-577aabf",
         "git+https://github.com/bouthilx/flow.git@6354eff#egg=flow-6354eff",
     ],
     setup_requires=['setuptools', 'pytest-runner'],
