@@ -315,7 +315,7 @@ def sample_distrib(mahler_client, tags, container, seed, params, usage,
     # if batch seeding < max_seed: sample
     # if all batches seeding >= max_seed: return True
 
-    batch_tags = ['distrib', 'seed-{}'.format(seed)]
+    batch_tags = ['distrib', 'd-seed-{}'.format(seed)]
 
     projection = {'registry.tags': 1, 'arguments.model_seed': 1, 'arguments.data.seed': 1}
 

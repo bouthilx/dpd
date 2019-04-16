@@ -86,7 +86,8 @@ def main(argv=None):
     setup_combinations = itertools.product(
         options.datasets, options.models)
     for dataset_name, model_name in setup_combinations:
-        tags = options.tags + [dataset_name, model_name, 'repro', 'median']
+        tags = options.tags + ['hpo-seed-{}'.format(options.hpo_seed), dataset_name, model_name,
+                               'repro', 'median']
 
         if any(True for _ in mahler_client.find(tags=tags + [run.name])) and not options.force:
             print('already registered for tags: {}'.format(", ".join(tags)))
