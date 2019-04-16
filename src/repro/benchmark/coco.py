@@ -230,6 +230,10 @@ class Problem:
 
         # Plot transfer
         for configurator_name, configurator_results in results.items():
+            if 'transfer' not in configurator_results:
+                print('Incomplete experiment f{:03d}-d{:03d}-s{}'.format(
+                    self.id, self.dimension, self.scenario))
+                return
             for i, instance_results in enumerate(configurator_results['transfer']):
                 x = list(range(self.warm_start, len(instance_results) + self.warm_start))
                 plt.plot(x, instance_results,
@@ -242,6 +246,8 @@ class Problem:
         plt.axvline(x=self.warm_start, linestyle='--')
 
         plt.title("f{:03d}-d{:03d}-s{}".format(self.id, self.dimension, self.scenario))
+
+        plt.yscale('log')
 
         plt.legend()
         file_path = filename_template.format(id=self.id, dimension=self.dimension,

@@ -2,9 +2,12 @@
 
 pip install numpy scipy
 
-cd ..
-  git clone https://github.com/numbbo/coco.git
-cd -
-cd ../coco
-  python do.py run-python
-cd -
+tmp=$(mktemp -d)
+
+git clone --depth 1 https://github.com/numbbo/coco.git $tmp
+
+cd $tmp
+python do.py run-python
+
+cd
+rm -rf $tmp
