@@ -54,7 +54,7 @@ class COCOBenchmark:
         benchmark_parser.add_argument('--scenarios', choices=self.scenarios, type=str, nargs='*')
         benchmark_parser.add_argument('--warm-start', type=int, default=50)
         benchmark_parser.add_argument('--max-trials', type=int, default=50)
-        benchmark_parser.add_argument('--workers', type=int, default=4)
+        benchmark_parser.add_argument('--workers', type=int, default=1)
 
         return benchmark_parser
 
@@ -123,11 +123,14 @@ class Problem:
 
     @property
     def tags(self):
-        tags = ['coco',
-                'f{:03d}'.format(self.id), 'd{:03d}'.format(self.dimension),
-                'i{:02d}'.format(self.instance_id),
-                's-{}'.format(self.scenario),
-                'm-{}'.format(self.warm_start)]
+        tags = [
+            'coco',
+            'f{:03d}'.format(self.id), 'd{:03d}'.format(self.dimension),
+            'i{:02d}'.format(self.instance_id),
+            's-{}'.format(self.scenario),
+            'm-{}'.format(self.warm_start),
+            'w-{}'.format(self.workers)
+        ]
         if self.previous_tags:
             tags += ['pv-{}'.format(tag) for tag in self.previous_tags]
         else:
@@ -416,5 +419,5 @@ if mahler is not None:
 
 if cocoex is not None:
     def build(problems=None, dimensions=None, instances=None, scenarios=None, previous_tags=None,
-              warm_start=None, workers=None, **kwargs):
+              warm_start=None, workers=1, **kwargs):
         return COCOBenchmark(problems, dimensions, instances, scenarios, previous_tags, warm_start, workers)
