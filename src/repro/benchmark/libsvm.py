@@ -65,9 +65,6 @@ def download_data(name):
         download(filename, url + filename, filename)
         data.append(load_svmlight_file(filename))
 
-    import pdb
-    pdb.set_trace()
-
     # TODO:
     # Get shape of each
     # Make zero template, and push csr into it
@@ -141,8 +138,6 @@ def load_dataset_names():
             continue
 
         dataset_names.append(name)
-
-        download_data(name)
 
     return dataset_names
 
