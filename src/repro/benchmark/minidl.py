@@ -7,9 +7,13 @@ from orion.core.io.space_builder import Space, DimensionBuilder
 import numpy
 
 from repro.hpo.base import build_hpo
-from repro.train import train
 
 from repro.utils.flatten import flatten, unflatten
+
+try:
+    from repro.train import train
+except ImportError:
+    train = None
 
 try:
     import mahler.client as mahler
@@ -224,8 +228,9 @@ class Problem:
         print('Registered', *tags)
 
 
-def build(datasets=None, dataset_folds=None, models=None, optimizers=None, scenarios=None, **kwargs):
-    return MiniDLBenchmark(datasets, dataset_folds, models, optimizers, scenarios)
+if train is not None:
+    def build(datasets=None, dataset_folds=None, models=None, optimizers=None, scenarios=None, **kwargs):
+        return MiniDLBenchmark(datasets, dataset_folds, models, optimizers, scenarios)
 
 
 # Scenarios
