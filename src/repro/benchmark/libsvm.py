@@ -65,15 +65,15 @@ def download_data(name):
         download(filename, url + filename, filename)
         data.append(load_svmlight_file(filename))
 
-    # TODO:
-    # Get shape of each
-    # Make zero template, and push csr into it
-    # Stack both
-    # Turn the stacked matrix into csr matrix
-    # Return
+    max_features = max(subset[0].shape[1] for subset in data)
 
-    x = scipy.sparse.vstack([subset[0] for subset in data])
-    y = numpy.stack([subset[1] for subset in data])
+    x = numpy.vstack(
+        [numpy.hstack([subset[0].todense(),
+                       numpy.zeros((subset[0].shape[0], max_features - subset[0].shape[1]))])
+         for subset in data])
+    x = scipy.sparse.csr_matrix(x)
+
+    y = numpy.concatenate([subset[1] for subset in data])
 
     return x, y
 
@@ -139,7 +139,7 @@ def load_dataset_names():
 
         dataset_names.append(name)
 
-        #download_data(name)
+        download_data(name)
 
     return dataset_names
 
@@ -168,7 +168,8 @@ class LIBSVMBenchmark:
         benchmark_parser.add_argument('--datasets', choices=self.datasets, nargs='*', type=str)
         benchmark_parser.add_argument('--dataset-folds', choices=self.dataset_folds, nargs='*',
                                       type=int)
-        benchmark_parser.add_argument('--processings', choices=self.processings, type=str, nargs='*')
+        benchmark_parser.add_argument('--processings', choices=self.processings, type=str,
+                                      nargs='*')
         benchmark_parser.add_argument('--scenarios', choices=self.scenarios, type=str, nargs='*')
         benchmark_parser.add_argument('--warm-start', type=int, default=50)
         benchmark_parser.add_argument('--max-trials', type=int, default=50)
@@ -293,7 +294,7 @@ class Problem:
     def visualize(self, results, filename_template):
         # TODO: Add visualize to benchmark as well, where it compares problems together.
 
-        PHASES = ['warmup', 'cold-turkey', 'transfer']
+        # PHASES = ['warmup', 'cold-turkey', 'transfer']
 
         import matplotlib.pyplot as plt
         ALPHA = 0.1
@@ -342,6 +343,340 @@ class Problem:
         plt.savefig(file_path, dpi=300)
         print("Saved", file_path)
         plt.clf()
+
+
+def execute():
+
+    pass
+
+
+# TODO: Pass model names from commandline and then automatically build the model configs
+#       then register those configs with mahler.
+def build_model_config(model_names):
+    model_config = {}
+    for model_name in model_names:
+        if model_name in model_config:
+            ith_instance = len(model_config[model_name])
+        else:
+            model_config[model_name] = {}
+            ith_instance = 0
+
+        if ith_instance in SPACES[model_name]:
+            space = SPACES[model_name][ith_instance]
+        else:
+            space = SPACES[model_name][0]
+
+        space = copy.deepcopy(space)
+        space['weight'] = 'uniform(0, 1)'
+        model_config[model_name][ith_instance] = space
+
+    return model_config
+
+
+# TODO:
+def build_space(model_config):
+    space = Space()
+    space_config = {}
+    for name, prior in flatten(model_config).items():
+        if not prior:
+            continue
+        try:
+            space[name] = dimension_builder.build(name, prior)
+        except TypeError as e:
+            print(str(e))
+            print('Ignoring key {} with prior {}'.format(name, prior))
+
+    return space
+
+
+SPACES = dict(
+    KNeighborsClassifier={
+        0: dict(
+            algorithm='brute',
+            n_neighbors='uniform(1, 20, discrete=True)',
+            weights='choices(["uniform", "distance"])',
+            p='uniform(1, 3, discrete=True)',
+            metric='choices(["euclidean", "manhattan", "chebyshev", "minkowski"])'),
+        1: dict(
+            algorithm='ball_tree',
+            n_neighbors='uniform(1, 20, discrete=True)',
+            weights='choices(["uniform", "distance"])',
+            leaf_size='uniform(1, 100, discrete=True)',
+            p='uniform(1, 3, discrete=True)',
+            metric='choices(["euclidean", "manhattan", "chebyshev", "minkowski"])'),
+        2: dict(
+            algorithm='kd_tree',
+            n_neighbors='uniform(1, 20, discrete=True)',
+            weights='choices(["uniform", "distance"])',
+            leaf_size='uniform(1, 100, discrete=True)',
+            p='uniform(1, 3, discrete=True)',
+            metric='choices(["euclidean", "manhattan", "chebyshev", "minkowski"])')
+    }
+    SVC={
+        0: dict(
+            kernel='linear',
+            C='loguniform(1e-3, 1e1)'),
+        1: dict(
+            kernel='poly',
+            gamma='loguniform(1e-4, 1e1)', C='loguniform(1e-3, 1e1)',
+            coef0='uniform(-1, 1)', degree='uniform(2, 5, discrete=True)'),
+        2: dict(
+            kernel='rbf',
+            gamma='loguniform(1e-4, 1e1)', C='loguniform(1e-3, 1e1)'),
+        3: dict(
+            kernel='sigmoid',
+            gamma='loguniform(1e-4, 1e1)', C='loguniform(1e-3, 1e1)',
+            coef0='uniform(-1, 1)'),
+    },
+    GaussianProcessClassifier={
+        0: dict(
+            length_scale='loguniform(1-e3, 1e3)')
+    },
+    DecisionTreeClassifier={
+        0: dict(
+            max_depth='uniform(3, 10, discrete=True)',
+            min_samples_leaf='uniform(0, 1)')
+    },
+    RandomForestClassifier={
+        0: dict(
+            max_depth='uniform(3, 10, discrete=True)',
+            n_estimators='loguniform(1, 1000, discrete=True)',
+            min_samples_leaf='uniform(0, 1)',
+            max_features='choices(["sqrt", "log2", None])')
+    },
+    RidgeClassifier={
+        0: dict(
+            alpha='loguniform(1e-2, 1e1)',
+            solver='choices(["svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"])'),
+    },
+    LogisticRegression={
+        0: dict(
+            penalty='choices(["l1", "l2"])',
+            solver='choices(["liblinear", "sag", "saga"])')
+    },
+    Perceptron={
+        0: dict(
+            penalty='choices(["l1", "l2", "elasticnet", None])',
+            alpha='loguniform(1e-5, 1)'),
+    },
+    # TODO: Probably too large for the complexity of the problems.
+    MLPClassifier={
+        0: dict(
+            solver='sgd',
+            hidden_layer_sizes='loguniform(10, 100, discrete=True, shape=1)', # 2-layers
+            activation='choices(["identity", "logistic", "tanh", "relu"])',
+            momentum='uniform(0.8, 0.9999)',
+            learning_rate='choices(["constant", "adaptive"])',
+            learning_rate_init='loguniform(1e-5, 1)',
+            alpha='loguniform(1e-10, 1)'),
+        1: dict(
+            solver='sgd',
+            hidden_layer_sizes='loguniform(10, 1000, discrete=True, shape=2)', # 2-layers
+            activation='choices(["identity", "logistic", "tanh", "relu"])',
+            solver='sgd',
+            momentum='uniform(0.8, 0.9999)',
+            learning_rate='choices(["constant", "adaptive"])',
+            learning_rate_init='loguniform(1e-5, 1)',
+            alpha='loguniform(1e-10, 1)'),
+        2: dict(
+            solver='adam',
+            hidden_layer_sizes='loguniform(10, 1000, discrete=True, shape=2)',
+            activation='choices(["identity", "logistic", "tanh", "relu"])',
+            solver='adam',
+            beta_1='uniform(0.8, 0.9999)',
+            beta_2='uniform(0.9, 0.9999)',
+            learning_rate='choices(["constant", "adaptive"])',
+            learning_rate_init='loguniform(1e-5, 1)',
+            alpha='loguniform(1e-10, 1)')
+    },
+    AdaBoostClassifier={
+        0: dict(
+            n_estimators='loguniform(10, 100)',
+            learning_rate='loguniform(1e-3, 1e1)'),
+    },
+    GaussianNB={
+        0: {}
+    },
+    LinearDiscriminantAnalysis={
+        0: {}
+    },
+    QuadraticDiscriminantAnalysis={
+        0: {}
+    })
+
+
+def create_trial(dataset_config, model_config, configurator_config, previous_tags=None,
+                 warm_start=0):
+    space = build_space(model_config)
+    configurator = build_hpo(space, **configurator_config)
+
+    # Create client inside function otherwise MongoDB does not play nicely with multiprocessing
+    mahler_client = mahler.Client()
+
+    if previous_tags is not None:
+        projection = {'output': 1, 'registry.status': 1}
+        trials = mahler_client.find(tags=previous_tags + ['create_trial'], _return_doc=True,
+                                    _projection=projection)
+        trials = list(trials)
+        assert len(trials) == 1, "{} gives {}".format(previous_tags, len(trials))
+        previous_run = trials[0]
+        if previous_run['registry']['status'] == 'Broken':
+            raise SignalSuspend('Previous HPO is broken')
+        elif previous_run['registry']['status'] != 'Completed':
+            raise SignalInterruptTask('Previous HPO not completed')
+
+        # TODO: For new hyper-parameters, sample a value from prior, even if we know the default
+        #       We should compare with one setting the default.
+        # TODO: For missing hyper-parameters, just drop it from params.
+        for trial in previous_run['output']['trials'][:warm_start]:
+            try:
+                configurator.observe([trial])
+            except AssertionError:
+                pass
+
+        print('There was {} compatible trials out of {}'.format(
+            len(configurator.trials), len(previous_run['output']['trials'])))
+
+        # And then we increment max_trials otherwise the configurator would already return
+        # is_completed() -> True
+        configurator.max_trials += len(configurator.trials)
+
+    objectives = []
+    trials = []
+
+    numpy.random.seed(dataset_config['fold'])
+    seeds = numpy.random.randint(1, 1000000, size=configurator.max_trials)
+
+    task = mahler_client.get_current_task()
+    tags = [tag for tag in task.tags if tag != task.name]
+    container = task.container
+
+    n_broken = 0
+    projection = {'output': 1, 'arguments': 1, 'registry.status': 1}
+    trials = mahler_client.find(tags=tags + [train.name, 'hpo'], _return_doc=True,
+                                _projection=projection)
+
+    n_uncompleted = 0
+    n_trials = 0
+
+    # NOTE: Only support sequential for now. Much simpler.
+    trials = []
+    print('---')
+    print("Training configurator")
+    for trial in trials:
+        n_trials += 1
+        trial = convert_mahler_task_to_trial(trial)
+        if trial['status'] == 'Cancelled':
+            continue
+
+        completed_but_broken = trial['status'] == 'Completed' and not trial['objective']
+        # Broken
+        if trial['status'] == 'Broken' or completed_but_broken:
+            n_broken += 1
+        # Uncompleted
+        elif trial['status'] != 'Completed':
+            n_uncompleted += 1
+        # Completed
+        else:
+            configurator.observe([trial])
+            objectives.append(trial['objective'])
+            trials.append(dict(params=get_params(trial['arguments'], space),
+                               objective=trial['objective']))
+
+    print('---')
+    print('There is {} trials'.format(n_trials))
+    print('{} uncompleted'.format(n_uncompleted))
+    print('{} completed'.format(len(configurator.trials)))
+    print('{} broken'.format(n_broken))
+
+    if n_broken > 0:
+        message = (
+            '{} trials are broken. Suspending creation of trials until investigation '
+            'is done.').format(n_broken)
+
+        mahler_client.close()
+        raise SignalSuspend(message)
+
+    if configurator.is_completed():
+        mahler_client.close()
+        return dict(trials=trials, objectives=objectives)
+
+    print('---')
+    print("Generating new configurations")
+    if n_uncompleted == 0:
+        # NOTE: Only completed trials are in configurator.trials
+        seed = int(seeds[len(configurator.trials)])
+        random.seed(seed)
+        params = configurator.get_params(seed=seed)
+        mahler_client.register(
+            train.delay(model_config=merge(model_config, params),
+                        dataset_config=dataset_config, seed=seed))
+    else:
+        print('A trial is pending, waiting for its completion before creating a new trial.')
+
+    mahler_client.close()
+    raise SignalInterruptTask('HPO not completed')
+
+
+def get_params(arguments, space):
+    params = dict()
+    flattened_arguments = flatten(arguments)
+    for key in space.keys():
+        params[key] = flattened_arguments[key]
+
+    return unflatten(params)
+
+
+def train(model_config, dataset_config, seed):
+    data = build_data(**dataset_config)
+    model = build_skdemocracy(seed=seed, **model_config)
+    fit(model, data['train']['features'], data['train']['labels'])
+
+    rval = dict(
+        train=compute_error_rate(model, data['train']['features'], data['train']['labels']),
+        valid=compute_error_rate(model, data['valid']['features'], data['valid']['labels']),
+        test=compute_error_rate(model, data['test']['features'], data['test']['labels']))
+
+    return rval
+
+
+def build_model(class_name, **kwargs):
+    if class_name == "GaussianProcessClassifier":
+        return GaussianProcessClassifier(RBF(**kwargs))
+    else:
+        return globals()[class_name](**kwargs)
+
+
+def build_skdemocracy(seed, **configs):
+    weights = []
+    classifiers = []
+    rng = numpy.random.RandomState(seed)
+    for class_name, model_configs in configs.items():
+        for i, model_config in model_configs.items():
+            if model_config['weight'] == 0:
+                continue
+            weights.append(model_config.pop('weight'))
+            random_state = rng.randint(1, 1000000)
+            classifiers.append(build_model(class_name, random_state=random_state, **model_config))
+
+    return dict(classifiers=classifiers, weights=weights)
+
+
+def fit(model, features, labels):
+    for classifier in model['classifiers'].items():
+        classifier.fit(features, labels)
+
+
+def compute_error_rate(model, features, labels):
+    preds = None
+    for weight, classifier in zip(model['weights'], model['classifiers']):
+        log_proba = classifier.predict_log_proba(features)
+        if preds is None:
+            preds = log_proba * weight
+        else:
+            preds += weight * log_proba
+
+    return (numpy.argmax(preds, axis=1) != labels).mean()
 
 
 def build(datasets=None, dataset_folds=None, processings=None, scenarios=None, previous_tags=None,
