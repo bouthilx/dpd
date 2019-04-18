@@ -1,8 +1,9 @@
 import itertools
 import logging
 import random
-
+import copy
 import numpy
+import time
 
 from orion.core.io.space_builder import Space, DimensionBuilder
 
@@ -29,8 +30,8 @@ class COCOBenchmark:
 
     name = 'coco'
 
-    def __init__(self, problem_ids=None, dimensions=None, instances=None, scenarios=None,
-                 previous_tags=None, warm_start=0, workers=None):
+    def __init__(self, problem_ids=None, dimensions=None, instances=None, scenarios=None, workers=None,
+                 previous_tags=None, warm_start=0):
         self.verify(problem_ids, dimensions, instances, scenarios)
         self._problem_ids = problem_ids
         self._dimensions = dimensions
@@ -39,7 +40,7 @@ class COCOBenchmark:
         self._previous_tags = previous_tags
         self._warm_start = warm_start
         self.suite = cocoex.Suite("bbob", "year: 2016", "")
-        self.workers = workers
+        self._workers = workers
 
     def verify(self, problems, dimensions, instances, scenarios):
         # TODO
@@ -53,8 +54,8 @@ class COCOBenchmark:
         benchmark_parser.add_argument('--instances', choices=self.instances, type=int, nargs='*')
         benchmark_parser.add_argument('--scenarios', choices=self.scenarios, type=str, nargs='*')
         benchmark_parser.add_argument('--warm-start', type=int, default=50)
-        benchmark_parser.add_argument('--max-trials', type=int, default=50)
-        benchmark_parser.add_argument('--workers', type=int, default=1)
+        benchmark_parser.add_argument('--max-trials', type=int, default=None)
+        benchmark_parser.add_argument('--workers', type=int, default=1, nargs='*')
 
         return benchmark_parser
 
@@ -80,6 +81,13 @@ class COCOBenchmark:
         return list(range(1, 6))
 
     @property
+    def workers(self):
+        if self._workers:
+            return self._workers
+
+        return list(range(1, 32))
+
+    @property
     def scenarios(self):
         if getattr(self, '_scenarios', None):
             return self._scenarios
@@ -101,18 +109,19 @@ class COCOBenchmark:
     @property
     def problems(self):
         configs = itertools.product(self.problem_ids, self.dimensions, self.instances,
-                                    self.scenarios)
+                                    self.scenarios, self.workers)
 
         for config in configs:
             try:
-                self.suite.get_problem_by_function_dimension_instance(*config[:-1])
+                self.suite.get_problem_by_function_dimension_instance(*config[:-2])
             except cocoex.exceptions.NoSuchProblemException:
                 continue
-            yield Problem(*(config + (self._previous_tags, self._warm_start)), workers=self.workers)
+
+            yield Problem(*(config + (self._previous_tags, self._warm_start)))
 
 
 class Problem:
-    def __init__(self, problem_id, dimension, instance_id, scenario, previous_tags, warm_start, workers):
+    def __init__(self, problem_id, dimension, instance_id, scenario, workers, previous_tags, warm_start):
         self.id = problem_id
         self.dimension = dimension
         self.instance_id = instance_id
@@ -125,7 +134,8 @@ class Problem:
     def tags(self):
         tags = [
             'coco',
-            'f{:03d}'.format(self.id), 'd{:03d}'.format(self.dimension),
+            'f{:03d}'.format(self.id),
+            'd{:03d}'.format(self.dimension),
             'i{:02d}'.format(self.instance_id),
             's-{}'.format(self.scenario),
             'm-{}'.format(self.warm_start),
@@ -180,7 +190,7 @@ class Problem:
             instance_id=self.instance_id)
 
     def execute(self, configurator_config):
-        rval = hpo_coco(
+        return self, hpo_coco(
             self.config,
             self.space_config,
             configurator_config=configurator_config,
@@ -188,9 +198,6 @@ class Problem:
             warm_start=self.warm_start,
             workers=self.workers
         )
-
-        print(self.id, self.dimension, self.instance_id)
-        print(len(rval['objectives']), min(rval['objectives']))
 
     def register(self, mahler_client, configurator_config, container, tags):
 
@@ -313,8 +320,25 @@ def build_problem(problem_id, nb_of_dimensions, instance_id):
 # 2.4.b.o o -> (lower, mid)
 # 2.4.b (mid, upper) -> (lower, mid)
 
+class Chrono:
+    def __init__(self, *args):
+        pass
 
-def hpo_coco(problem_config, space_config, configurator_config, previous_tags=None, warm_start=0, workers=4):
+    def __enter__(self):
+        self.start = time.time()
+        self.end = 0
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.end = time.time()
+        return self
+
+    @property
+    def val(self):
+        return self.end - self.start
+
+
+def hpo_coco(problem_config, space_config, configurator_config, workers=4, previous_tags=None, warm_start=0):
 
     problem = build_problem(**problem_config)
     space = build_space(problem, **space_config)
@@ -359,23 +383,45 @@ def hpo_coco(problem_config, space_config, configurator_config, previous_tags=No
     pool = make_pool('python', workers)
     problem_builder = LazyInstantiator(build_problem, **problem_config)
 
+    hpo_times = []
+
     while not configurator.is_completed():
         args = []
 
+        original_configurator = configurator
+        configurator = copy.deepcopy(original_configurator)
+
         for i in range(0, workers):
             n = len(configurator.trials) + i
-
-            if n == configurator.max_trials:
+            if n >= configurator.max_trials:
                 break
 
             seed = seeds[n]
             random.seed(seed)
-            args.append((problem_builder, configurator.get_params(seed=seed)))
 
+            with Chrono('hpo_time') as timer:
+                original_configurator.get_params(seed=seed)
+                params = configurator.get_params(seed=seed)
+
+            hpo_times.append(timer.val)
+
+            max_val = 999999999
+            if objectives:
+                max_val = max(objectives)
+            configurator.observe([dict(params=params, objective=max_val)])
+
+            args.append((problem_builder, params))
+
+        configurator = original_configurator
         rvals = pool.starmap(hpo_parallel, args)
 
-        for params, rval in rvals:
-            trial = dict(params=params, objective=rval)
+        for (params, rval, exec_time), hpo_time in zip(rvals, hpo_times):
+            trial = dict(
+                params=params,
+                objective=rval,
+                hpo_time=hpo_time,
+                exec_time=exec_time
+            )
 
             trials.append(trial)
             configurator.observe([trial])
@@ -384,12 +430,15 @@ def hpo_coco(problem_config, space_config, configurator_config, previous_tags=No
     pool.close()
     pool.join()
 
-    return dict(trials=trials, objectives=objectives)
+    return problem, trials  # dict(trials=trials, problem=problem)
 
 
 def hpo_parallel(problem_builder, params):
-    problem = problem_builder()
-    return params, problem([params[get_dim_name(dim)] for dim in range(problem.dimension)])
+    with Chrono('exec') as timer:
+        problem = problem_builder()
+        ret = problem([params[get_dim_name(dim)] for dim in range(problem.dimension)])
+
+    return params, ret, timer.val
 
 
 def build_space(problem, **space_config):
@@ -408,8 +457,6 @@ def build_space(problem, **space_config):
         space[name] = DimensionBuilder().build(
             name, '{prior}({lower_bound}, {upper_bound})'.format(**config))
 
-    print(space)
-
     return space
 
 
@@ -420,4 +467,4 @@ if mahler is not None:
 if cocoex is not None:
     def build(problems=None, dimensions=None, instances=None, scenarios=None, previous_tags=None,
               warm_start=None, workers=1, **kwargs):
-        return COCOBenchmark(problems, dimensions, instances, scenarios, previous_tags, warm_start, workers)
+        return COCOBenchmark(problems, dimensions, instances, scenarios, workers, previous_tags, warm_start)
