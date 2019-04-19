@@ -226,7 +226,7 @@ class DPDIce(DPDRock):
     def suspend_if_needed(self, trial_id, step):
         msg = self.trials[trial_id].should_suspend(trial_id, step)
         status = SUSPENDED if msg else RUNNING
-        self.db_client.tasks.signal_status.find_and_update(
+        self.db_client.tasks.signal_status.find_one_and_update(
             {'_id': trial_id}, {'status': status, 'msg': msg, 'step': step})
 
         # TODO: push sparse matrix for distributed updates.
@@ -521,7 +521,8 @@ class Experiment:
 class DynamicPercentileDispatcher:
 
     def __init__(self, initial_population, final_population, n_steps=30, window_size=11,
-                 n_points=200, min_population=3, population_growth_brake=0.5):
+                 n_points=200, min_population=3, population_growth_brake=0.5,
+                 update_timeout=60):
 
         self.initial_population = initial_population
         self.final_population = final_population
@@ -533,6 +534,7 @@ class DynamicPercentileDispatcher:
         print('Percentile:', self.percentile)
         self.min_population = min_population
         self.population_growth_brake = population_growth_brake
+        self.update_timeout = update_timeout
 
         self.task_timestamp = None
         self.metric_timestamp = None
@@ -561,7 +563,7 @@ class DynamicPercentileDispatcher:
     def verify(self, epoch):
         i = 0
         start_time = time.time()
-        while start_time - time.time() < self.update_timeout:
+        while time.time() - start_time < self.update_timeout:
             docs = list(self.db_client.tasks.signal_status.find({'_id': self.task.id}))
             if docs and docs[0]['step'] == epoch:
                 if docs[0]['status'] == SUSPENDED:
@@ -571,12 +573,12 @@ class DynamicPercentileDispatcher:
             time.sleep(2 ** i)
             i += 1
 
-        raise SignalInterruptTask('DPD Timeout: {}'.format(start_time - time.time()))
+        raise SignalInterruptTask('DPD Timeout: {}'.format(time.time() - start_time))
 
     def signal_resume(self, epoch):
         # Make sure it does not exist, or that it was expected to resume
         docs = list(self.db_client.tasks.signal_status.find({'_id': self.task.id}))
-        if docs and docs[0]['status'] != RUNNING or docs[0]['step'] != epoch:
+        if docs and (docs[0]['status'] != RUNNING or docs[0]['step'] != epoch):
             if docs[0]['status'] == SUSPENDED:
                 message = 'Cannot resume: {}'.format(docs[0]['msg'])
             else:
@@ -584,7 +586,7 @@ class DynamicPercentileDispatcher:
             raise SignalSuspend(message)
 
     def signal_completion(self, epoch):
-        self.db_client.tasks.signal_status.find_and_update(
+        self.db_client.tasks.signal_status.find_one_and_update(
             {'_id': self.task.id}, {'$set': {'status': COMPLETED, 'msg': '', 'step': epoch}})
 
 
