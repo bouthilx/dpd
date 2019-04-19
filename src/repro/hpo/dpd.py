@@ -88,7 +88,11 @@ class DPDRock(cotyledon.Service):
         trial_added = self.experiments[tags].add_trial(trial_id, status)
 
         self.task_timestamp = timestamp
-        self.first_task_timestamp = min(self.first_task_timestamp, timestamp)
+
+        if self.first_task_timestamp:
+            self.first_task_timestamp = min(self.first_task_timestamp, timestamp)
+        else:
+            self.first_task_timestamp = timestamp
 
         if self.metric_timestamp:
             self.metric_timestamp = min(self.task_timestamp, self.metric_timestamp)
