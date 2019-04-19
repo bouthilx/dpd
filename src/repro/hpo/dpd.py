@@ -49,7 +49,10 @@ class DPDRock(cotyledon.Service):
 
         self._backoff = 0
 
-        self.print('Started with {}'.format({'tags': tags, 'timestamp': timestamp.generation_time}))
+        if timestamp:
+            timestamp = str(timestamp.generation_time)
+
+        self.print('Started with {}'.format({'tags': tags, 'timestamp': timestamp}))
 
     def print(self, *msg, out=None):
         if out not in self.files:
