@@ -48,6 +48,7 @@ class BayesianOptimizer:
     def get_params(self, seed=None):
         if seed is None:
             seed = random.randint(0, 100000)
+
         self.primary.algorithm._init_optimizer()
         optimizer = self.primary.algorithm.optimizer
         optimizer.rng.seed(seed)
