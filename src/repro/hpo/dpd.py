@@ -41,6 +41,7 @@ class DPDRock(cotyledon.Service):
         self.id = worker_id
         self.experiments = {}
         self.trials = {}
+        self.first_task_timestamp = None
         self.task_timestamp = timestamp
         self.metric_timestamp = timestamp
         self.tags = tags
@@ -48,7 +49,7 @@ class DPDRock(cotyledon.Service):
 
         self._backoff = 0
 
-        self.print('Started with {}'.format({'tags': tags, 'timestamp': timestamp}))
+        self.print('Started with {}'.format({'tags': tags, 'timestamp': timestamp.generation_time}))
 
     def print(self, *msg, out=None):
         if out not in self.files:
@@ -84,6 +85,7 @@ class DPDRock(cotyledon.Service):
         trial_added = self.experiments[tags].add_trial(trial_id, status)
 
         self.task_timestamp = timestamp
+        self.first_task_timestamp = min(self.first_task_timestamp, timestamp)
 
         if self.metric_timestamp:
             self.metric_timestamp = min(self.task_timestamp, self.metric_timestamp)
@@ -122,6 +124,9 @@ class DPDRock(cotyledon.Service):
             # If a trial is added, maybe some metrics were loaded but discarded because trial was
             # not loaded yet. To be safe, fallback metric_timestamp
         self.print('{:10d} new trials:  {:>5f} seconds'.format(trials_added, time.time() - start))
+
+        if self.metric_timestamp is None and self.first_task_timestamp:
+            self.metric_timestamp = self.first_task_timestamp
 
         return trials_added
 
@@ -227,7 +232,7 @@ class DPDIce(DPDRock):
         msg = self.trials[trial_id].should_suspend(trial_id, step)
         status = SUSPENDED if msg else RUNNING
         self.db_client.tasks.signal_status.find_one_and_update(
-            {'_id': trial_id}, {'status': status, 'msg': msg, 'step': step})
+            {'_id': trial_id}, {'$set': {'status': status, 'msg': msg, 'step': step}})
 
         # TODO: push sparse matrix for distributed updates.
 
