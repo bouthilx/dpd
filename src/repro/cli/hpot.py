@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import re
+import json
 
 import yaml
 
@@ -82,6 +83,8 @@ def main(argv=None):
     execute_subparser = subparsers.add_parser('execute')
     execute_subparsers = execute_subparser.add_subparsers(
         dest='benchmark', title='benchmark', description='benchmark', help='')
+
+    execute_subparser.add_argument('--json-file', type=str, default=None)
     execute_subparsers = build_benchmark_subparsers(execute_subparsers)
 
     if mahler is not None:
@@ -151,7 +154,7 @@ def load_config(config_dir_path, benchmark, configurator):
         benchmark=benchmark, configurator=configurator)
 
     with open(config_path, 'r') as f:
-        config = yaml.load(f)
+        config = yaml.load(f, Loader=yaml.FullLoader)
 
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
         config['max_trials'] = 5
@@ -215,12 +218,32 @@ def register(benchmark, options):
 
 
 def execute(benchmark, options):
-    print(benchmark.scenarios)
-    for problem, configurator in itertools.product(benchmark.problems, options.configurators):
-        print(problem.scenario)
-        configurator_config = load_config(options.config_dir_path, benchmark.name, configurator)
+    print(f'Benchmark Scenario: {benchmark.scenarios}')
 
-        problem.execute(configurator_config)
+    optim_data = {}
+
+    for problem, configurator in itertools.product(benchmark.problems, options.configurators):
+        print(f'Problem Scenario {problem.scenario} - {configurator}')
+
+        if configurator not in optim_data:
+            optim_data[configurator] = {}
+
+        optim_config = optim_data[configurator]
+
+        configurator_config = load_config(options.config_dir_path, benchmark.name, configurator)
+        if options.max_trials:
+            configurator_config['max_trials'] = options.max_trials
+
+        problem, (_, trials) = problem.execute(configurator_config)
+        optim_config[','.join(problem.tags)] = trials
+
+    # ---
+    if options.json_file is not None:
+        data = json.dumps(optim_data, indent=4)
+        json_file = open(options.json_file, 'w')
+        json_file.write(data)
+        json_file.write('\n')
+        json_file.close()
 
 
 INSTANCE_TAG_REGEX = re.compile('^(pv-)*(df-[0-5]|i[0-9]{2})$')
@@ -247,7 +270,6 @@ def visualize(benchmark, options):
         # ***
 
         projection = {'output': 1, 'registry.status': 1, 'registry.tags': 1, 'arguments': 1}
-
 
         # Load problem used to warm-start
         previous_problem = copy.deepcopy(problem)
@@ -347,7 +369,6 @@ SCENARIOS = {
     "2.4.b": ["2.4.a", None]}
 
 
-
 # if scenario 0.
 #     if s-0 pv-none v does not exists: register.
 #     register s-0 pv-v
@@ -361,12 +382,6 @@ SCENARIOS = {
 # if scenario 2.4.b
 #     if s-2.4.a pv-none v does not exists: register.
 #     register s-2.4.b v pv-v pv-s-2.4.a ...
-
-
-
-
-
-
 
 
 if __name__ == "__main__":
