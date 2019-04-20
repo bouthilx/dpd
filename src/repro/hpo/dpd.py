@@ -258,7 +258,9 @@ class DPDIce(DPDRock):
         msg = self.trials[trial_id].should_suspend(trial_id, step)
         status = SUSPENDED if msg else RUNNING
         self.db_client.tasks.signal_status.find_one_and_update(
-            {'_id': trial_id}, {'$set': {'status': status, 'msg': msg, 'step': step}})
+            {'_id': bson.ObjectId(trial_id)},
+            {'$set': {'status': status, 'msg': msg, 'step': step}},
+            upsert=True)
 
         # TODO: push sparse matrix for distributed updates.
 
@@ -437,7 +439,7 @@ class Experiment:
                 trial_value, percentile, decisive_epoch, population_message)
             return message
 
-    def should_suspend(self, metric_key, epoch):
+    def should_suspend(self, trial_id, epoch):
         # if epoch < self.grace:
         #     return
 
@@ -475,12 +477,12 @@ class Experiment:
         elif percentile is None:
             return
 
-        decisive_value = self.smooth_metrics[self.trials[str(self.task.id)], decisive_epoch]
+        decisive_value = self.smooth_metrics[self.trials[trial_id], decisive_epoch]
         # print(decisive_value)
         if decisive_value > percentile:
             message = 'value({}) > percentile({}) at epoch({}) with population({})'.format(
                 decisive_value, percentile, decisive_epoch, population)
-            raise message
+            return message
 
     def fetch_results(self, epoch, include_task=True):
         mask = self.smooth_metrics[:, epoch] >= 0
@@ -593,28 +595,33 @@ class DynamicPercentileDispatcher:
 
     def verify(self, epoch):
         i = 0
+        docs = []
         start_time = time.time()
         while time.time() - start_time < self.update_timeout:
+            print({'_id': self.task.id})
             docs = list(self.db_client.tasks.signal_status.find({'_id': self.task.id}))
+            print(docs)
             if docs and docs[0]['step'] == epoch:
                 if docs[0]['status'] == SUSPENDED:
                     raise SignalSuspend(docs[0]['msg'])
 
                 return
+            print('sleeping', 2**i)
             time.sleep(2 ** i)
             i += 1
 
-        raise SignalInterruptTask('DPD Timeout: {}'.format(time.time() - start_time))
+        raise SignalInterruptTask('DPD Timeout: {: 2.1f}s ({})'.format(
+            time.time() - start_time, docs[0].get('step', -1) if docs else None))
 
     def signal_resume(self, epoch):
         # Make sure it does not exist, or that it was expected to resume
         docs = list(self.db_client.tasks.signal_status.find({'_id': self.task.id}))
-        if docs and (docs[0]['status'] != RUNNING or docs[0]['step'] != epoch):
+        if docs and (docs[0]['status'] != RUNNING and docs[0]['step'] <= epoch):
             if docs[0]['status'] == SUSPENDED:
                 message = 'Cannot resume: {}'.format(docs[0]['msg'])
             else:
                 message = 'Trial was not signaled properly: {}'.format(docs[0]['status'])
-            raise SignalSuspend(message)
+            raise RuntimeError(message)
 
     def signal_completion(self, epoch):
         self.db_client.tasks.signal_status.find_one_and_update(
