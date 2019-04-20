@@ -9,7 +9,7 @@ import numpy
 
 import mahler.client as mahler
 from mahler.core.utils.flatten import flatten, unflatten
-from mahler.core.utils.errors import SignalSuspend
+from mahler.core.utils.errors import SignalInterruptTask, SignalSuspend
 
 from orion.core.io.space_builder import Space, DimensionBuilder
 
@@ -151,7 +151,6 @@ def create_trial(config_dir_path, dataset_name, model_name,
         n_broken += int(trial['registry']['status'] == 'Broken')
         # Not Completed, or Completed but broken with empty output
         if trial['registry']['status'] != 'Completed' or not trial['output']:
-            print(trial['id'], trial['registry']['status'])
             n_uncompleted += 1
         else:
             n_completed += 1
@@ -172,8 +171,10 @@ def create_trial(config_dir_path, dataset_name, model_name,
 
     seeds = numpy.random.RandomState(seed).randint(1, 1000000, size=n_trials)
 
+    new_trials = False
     print("Generating new configurations")
     for i in range(max(n_trials - len(trials), 0)):
+        new_trials = True
         config['max_epochs'] = max_epochs
         # Use variances_samples[seed] for exp seed so that first exp in
         # variance trials matches the seed of hpo trials.
@@ -189,11 +190,14 @@ def create_trial(config_dir_path, dataset_name, model_name,
     assert len(trials) == n_trials
     print('Done.')
 
-    while not draw_variance_samples(mahler_client, tags, container, trials, **variance_samples):
-        print('Waiting 5 mins for trials to complete')
-        sys.stdout.flush()
-        sys.stderr.flush()
-        time.sleep(60 * 5)
+    if not draw_variance_samples(mahler_client, tags, container, trials, **variance_samples):
+        if not new_trials:
+            print('Waiting 5 mins for trials to complete')
+            sys.stdout.flush()
+            sys.stderr.flush()
+            time.sleep(60 * 5)
+        mahler_client.close()
+        raise SignalInterruptTask('Trials not completed')
 
     print('Experiment generation completed.')
 
