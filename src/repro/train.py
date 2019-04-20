@@ -16,7 +16,7 @@ import torch.optim
 import yaml
 
 from repro.dataset.base import build_dataset
-from repro.hpo.dpd import DynamicPercentileDispacher
+from repro.hpo.dpd import DynamicPercentileDispatcher
 from repro.log import Logger
 from repro.model.base import (
     build_model, get_checkpoint_file_path, load_checkpoint, save_checkpoint, clear_checkpoint)
@@ -192,7 +192,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
     print('    Stopping rule')
     if stopping_rule:
-        stopping_rule = DynamicPercentileDispacher(**stopping_rule)
+        stopping_rule = DynamicPercentileDispatcher(**stopping_rule)
 
     print('    Set timer events')
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
