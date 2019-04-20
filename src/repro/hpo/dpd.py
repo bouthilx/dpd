@@ -2,6 +2,7 @@ import argparse
 import bisect
 import bson
 import datetime
+import os
 import time
 
 import cotyledon
@@ -21,14 +22,14 @@ except ImportError:
 
 
 class DPDManager(cotyledon.ServiceManager):
-    def __init__(self, tags, timestamp=None):
+    def __init__(self, tags, output, timestamp=None):
         super(DPDManager, self).__init__()
 
         if timestamp:
             timestamp = bson.ObjectId.from_datetime(timestamp)
 
-        self.add(DPDFire, args=(tags, timestamp, ))
-        self.add(DPDIce, args=(tags, timestamp, ))
+        self.add(DPDFire, args=(tags, output, timestamp, ))
+        self.add(DPDIce, args=(tags, output, timestamp, ))
 
 
 class DPDRock(cotyledon.Service):
@@ -37,7 +38,7 @@ class DPDRock(cotyledon.Service):
     """
     name = 'dpd-rock'
 
-    def __init__(self, worker_id, tags, timestamp=None):
+    def __init__(self, worker_id, tags, output, timestamp=None):
         self.id = worker_id
         self.experiments = {}
         self.trials = {}
@@ -45,6 +46,8 @@ class DPDRock(cotyledon.Service):
         self.task_timestamp = timestamp
         self.metric_timestamp = timestamp
         self.tags = tags
+
+        self.output = output
         self.files = {}
 
         self._backoff = 0
@@ -54,19 +57,34 @@ class DPDRock(cotyledon.Service):
 
         self.print('Started with {}'.format({'tags': tags, 'timestamp': timestamp}))
 
-    def print(self, *msg, out=None):
-        if out not in self.files:
-            if out:
-                filename = '{}-{}-{}.log'.format(self.name, self.id, out)
-            else:
-                out = '{}-{}'.format(self.name, self.id)
-                filename = '{}-{}.log'.format(self.name, self.id)
+    def print(self, *msg, name=None):
+        if self.output is None:
+            self.print_to_stdout(*msg, name=name)
+        else:
+            self.print_to_file(*msg, name=name)
 
-            self.files[out] = open(filename, 'a')
+    def print_to_stdout(self, *msg, name):
+        header = '{}({})'.format(self.name, self.id)
+        if name:
+            header += '-' + name
 
-        out = self.files[out]
+        print(datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'), header, '\t', *msg)
 
-        print(datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'), '\t', *msg, file=out)
+    def print_to_file(self, *msg, name):
+        filename = '{}-{}'.format(self.name, self.id)
+        if name:
+            filename += '-' + name
+
+        filename += '.log'
+
+        filepath = os.path.join(self.output, filename)
+
+        if filename not in self.files:
+            self.files[filename] = open(filename, 'a')
+
+        f = self.files[out]
+
+        print(datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'), '\t', *msg, file=f)
 
     @property
     def db_client(self):
@@ -185,11 +203,11 @@ class DPDFire(DPDRock):
         if task.status.name != 'Suspended':
             return False
         try:
-            self.print(task.id, task.status, out=tags)
-            self.print(message, out=tags)
-            # self.mahler_client.resume(task, message)
-            # self.db_client.tasks.signal_status.find_one_and_update(
-            #     {'_id': trial_id}, {'$set': {'status': RUNNING, 'msg': ''}})
+            self.print(task.id, task.status, name=tags)
+            self.print(message, name=tags)
+            self.mahler_client.resume(task, message)
+            self.db_client.tasks.signal_status.find_one_and_update(
+                {'_id': bson.ObjectId(trial_id)}, {'$set': {'status': RUNNING, 'msg': ''}})
             thawed = True
         except (ValueError, RaceCondition):
             thawed = False
@@ -212,16 +230,17 @@ class DPDFire(DPDRock):
 
         self.print('{:10d} trials thawed: {:>5f} seconds'.format(thawed, time.time() - start_time))
 
+        return thawed
+
     def run(self):
         self.open_connection()
 
         while True:
             changes = self.update_trials()
             changes += self.update_metrics()
+            changes += self.thaw_trials()
 
             self.backoff(changes)
-
-            self.thaw_trials()
 
 
 COMPLETED = 0
@@ -607,6 +626,11 @@ if __name__ == '__main__':
     parser.add_argument(
         '--tags', nargs='*', type=str, default=['hpo'],
         help='Tags used to limit which trials may be loaded for scheduling. Default: hpo')
+
+    parser.add_argument(
+        '--output', type=str, default=None,
+        help='Output dir where to write logs. If not specified, log is printed to stdout')
+
     parser.add_argument(
         '--cold', action='store_true',
         help='Start indexing from now, so that prior experiments are ignored.')
@@ -614,4 +638,4 @@ if __name__ == '__main__':
     options = parser.parse_args()
     tags = list(sorted(set(options.tags)))
     timestamp = datetime.datetime.utcnow() if options.cold else None
-    DPDManager(tags=options.tags, timestamp=timestamp).run()
+    DPDManager(tags=options.tags, output=options.output, timestamp=timestamp).run()
