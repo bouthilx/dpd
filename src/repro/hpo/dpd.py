@@ -180,7 +180,7 @@ class DPDRock(cotyledon.Service):
 
     def backoff(self, changes):
         if changes == 0:
-            sleep_time = min(2 ** self._backoff, 360)
+            sleep_time = min(2 ** self._backoff, 32)
             self.print('No changes. Sleeping for {}sec'.format(sleep_time))
             time.sleep(sleep_time)
             self._backoff += 1
