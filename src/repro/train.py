@@ -223,7 +223,8 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
             engine.state.output = 0.0
             # trainer_save_checkpoint(engine)
 
-        stopping_rule.signal_resume(engine.state.epoch)
+        if stopping_rule:
+            stopping_rule.signal_resume(engine.state.epoch)
 
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
@@ -248,7 +249,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
                 loss=metrics['nll'],
                 error_rate=1. - metrics['accuracy'])
 
-            if name == 'valid':
+            if name == 'valid' and stopping_rule:
                 stopping_rule.signal_step(stats)
 
         if lr_scheduler:
