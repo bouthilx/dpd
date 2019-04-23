@@ -93,15 +93,15 @@ class DPDRock(cotyledon.Service):
     def open_connection(self):
         self.mahler_client = mahler.Client()
 
-    def add_experiment(self, tags, trial_id):
+    def add_experiment(self, tags, trial_id, rules):
         if tags not in self.experiments:
             self.print('Adding experiment {}'.format(tags))
-            self.experiments[tags] = Experiment(tags=tags)
+            self.experiments[tags] = Experiment(tags=tags, **rules)
 
         self.trials[trial_id] = self.experiments[tags]
 
-    def add_trial(self, tags, trial_id, timestamp, status):
-        self.add_experiment(tags, trial_id)
+    def add_trial(self, tags, trial_id, report_timestamp, status, rules):
+        self.add_experiment(tags, trial_id, rules)
 
         trial_added = self.experiments[tags].add_trial(trial_id, status)
 
@@ -136,7 +136,9 @@ class DPDRock(cotyledon.Service):
         if self.task_timestamp:
             query['registry.reported_on'] = {'$gt': objectid.ObjectId(self.task_timestamp)}
 
-        projection = {'_id': 1, 'registry.reported_on': 1, 'registry.tags': 1, 'registry.status': 1}
+        projection = {
+            '_id': 1, 'registry.reported_on': 1, 'registry.tags': 1, 'registry.status': 1,
+            'arguments.stopping_rule': 1}
 
         trials_added = 0
         start = time.time()
@@ -144,8 +146,9 @@ class DPDRock(cotyledon.Service):
         for trial in self.db_client.tasks.report.find(query, projection):
             trials_added += int(self.add_trial(
                 ':'.join(sorted(trial['registry']['tags'])), str(trial['_id']),
-                timestamp=trial['registry']['reported_on'],
-                status=trial['registry']['status']))
+                report_timestamp=trial['registry']['reported_on'],
+                status=trial['registry']['status'],
+                rules=trial['arguments']['stopping_rule']))
             # If a trial is added, maybe some metrics were loaded but discarded because trial was
             # not loaded yet. To be safe, fallback metric_timestamp
         self.print('{:10d} new trials:  {:>5f} seconds'.format(trials_added, time.time() - start))
