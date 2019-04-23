@@ -647,9 +647,14 @@ class DynamicPercentileDispatcher:
         if docs and (docs[0]['status'] != RUNNING and docs[0]['step'] <= epoch):
             if docs[0]['status'] == SUSPENDED:
                 message = 'Cannot resume: {}'.format(docs[0]['msg'])
+                raise SignalSuspend(message)
             else:
                 message = 'Trial was not signaled properly: {}'.format(docs[0]['status'])
-            raise RuntimeError(message)
+                raise RuntimeError(message)
+        elif docs and docs[0]['step'] > epoch:
+            message = 'Progress partly lost. Starting over at epoch {}'.format(epoch)
+            self.db_client.tasks.signal_status.find_one_and_update(
+                {'_id': self.task.id}, {'$set': {'status': RUNNING, 'msg': message, 'step': epoch}})
 
     def signal_completion(self, epoch):
         self.db_client.tasks.signal_status.find_one_and_update(
