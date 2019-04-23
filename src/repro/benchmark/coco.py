@@ -3,7 +3,9 @@ import logging
 import random
 import copy
 import numpy
-import time
+
+from typing import List, Tuple, Dict, Optional
+from dataclasses import dataclass, field
 
 from orion.core.io.space_builder import Space, DimensionBuilder
 
@@ -25,6 +27,53 @@ except ImportError:
 
 
 logger = logging.getLogger(__name__)
+
+
+# default scenarios
+default_scenarios = [
+    '0.0',  # No diff
+    '2.1',  # Fewer H-Ps
+    '2.2',  # More H-Ps
+    '2.3.a',  # Prior changed
+    '2.3.b',  # Prior changed
+    '2.4.a',
+    '2.4.b',
+    '3.1',  # Code change without any effect
+    '3.2',  # Loss is reversed
+    '3.3',  # Loss is scaled
+    '3.4',  # H-P is reversed
+    '3.5'
+]
+
+
+@dataclass
+class CocoBenchmark:
+    name: str = 'coco'
+    problem_ids: List[int] = field(default_factory=lambda: list(range(1, 25)))
+    instances: List[int] = field(default_factory=lambda: list(range(1, 6)))
+    scenarios: List[str] = field(default_factory=lambda: copy.deeepcopy(default_scenarios))
+    workers: List[int] = field(default_factory=lambda: list(range(1, 32)))
+    previous_tags: Optional[List[str]] = None
+    warm_start = 0
+    suite = cocoex.Suite("bbob", "year: 2016", "")
+    dimensions: List[int] = suite.dimensions
+
+
+def add_subparser(parser, benchmark):
+    benchmark_parser = parser.add_parser(benchmark.name)
+
+    for name, attr in dir(benchmark):
+
+    #benchmark_parser.add_argument('--problems', choices=self.problem_ids, type=int, nargs='*')
+    #benchmark_parser.add_argument('--dimensions', choices=self.dimensions, type=int, nargs='*')
+    #benchmark_parser.add_argument('--instances', choices=self.instances, type=int, nargs='*')
+    #benchmark_parser.add_argument('--scenarios', choices=self.scenarios, type=str, nargs='*')
+    #benchmark_parser.add_argument('--warm-start', type=int, default=50)
+    #benchmark_parser.add_argument('--max-trials', type=int, default=None)
+    #benchmark_parser.add_argument('--workers', type=int, default=1, nargs='*')
+
+    return benchmark_parser
+
 
 
 class COCOBenchmark:
