@@ -626,17 +626,17 @@ class DynamicPercentileDispatcher:
         docs = []
         start_time = time.time()
         while time.time() - start_time < self.update_timeout:
-            print({'_id': self.task.id})
+            if i >= 0:
+                print('sleeping', 2**i)
+                time.sleep(2 ** i)
+
+            i += 1
             docs = list(self.db_client.tasks.signal_status.find({'_id': self.task.id}))
-            print(docs)
             if docs and docs[0]['step'] == epoch:
                 if docs[0]['status'] == SUSPENDED:
                     raise SignalSuspend(docs[0]['msg'])
 
                 return
-            print('sleeping', 2**i)
-            time.sleep(2 ** i)
-            i += 1
 
         raise SignalInterruptTask('DPD Timeout: {: 2.1f}s ({})'.format(
             time.time() - start_time, docs[0].get('step', -1) if docs else None))
