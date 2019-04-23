@@ -235,10 +235,12 @@ class DPDFire(DPDRock):
 
     def thaw_if_possible(self, experiment, trial_id):
         self.print('Eval {} for thaw'.format(trial_id), name=experiment.tags)
-        msg = experiment.should_thaw(trial_id)
+        should_thaw, msg = experiment.should_thaw(trial_id)
 
-        if msg:
+        if should_thaw:
             return self.thaw(trial_id, msg, experiment.tags)
+
+        self.print('    ', msg, name=experiment.tags)
 
         return False
 
@@ -246,6 +248,7 @@ class DPDFire(DPDRock):
         thawed = 0
         start_time = time.time()
         for experiment in self.experiments.values():
+            self.print('Decisive steps: {}'.format(experiment.get_decisive_steps()), name=experiment.tags)
             for trial_id in experiment.get_resumable_trials():
                 thawed += int(self.thaw_if_possible(experiment, trial_id))
 
@@ -354,7 +357,6 @@ class Experiment:
             n_completed += int(status == 'Completed')
             n_suspended += int(status == 'Suspended')
 
-        print(n_completed, n_suspended, self.initial_population, self.final_population)
         if ((n_completed < self.final_population) or
             (n_completed + n_suspended < self.initial_population)):
 
@@ -432,7 +434,7 @@ class Experiment:
 
         epochs = numpy.where(trial_metrics >= 0)[0]
         if epochs.shape[0] == 0:
-            return
+            return False, 'No points yet'
 
         last_epoch = epochs[-1]
 
@@ -447,25 +449,36 @@ class Experiment:
         if last_epoch < decisive_epoch:
             message = 'Should not be suspended before epoch {}. (Was {}) ({})'.format(
                 decisive_epoch, last_epoch, decisive_epoch)
-            return message
+            return True, message
 
         percentile, population = self.fetch_results(last_epoch)
 
         if percentile is None:
-            return
+            return False, 'not enough population ({}) at epoch {}'.format(population, last_epoch)
 
         trial_value = trial_metrics[last_epoch]
         # Deliberately avoid = median to limit unstability
         # (if one trial moves around median it would get suspended and resumed very often)
         population_at_step = self.initial_population * (self.ratio) ** (idx + 1)
-        enough_population = population >= population_at_step * self.population_growth_brake
+        enough_population = population >= int(population_at_step * self.population_growth_brake)
         if trial_value < percentile and enough_population:
             population_message = '{} >= {} ({} * {} * {} ** {})'.format(
                 population, population_at_step * self.population_growth_brake,
                 self.population_growth_brake, self.initial_population, self.ratio, idx + 1)
             message = 'value({}) < percentile({}) at epoch({}) with population({})'.format(
                 trial_value, percentile, decisive_epoch, population_message)
-            return message
+            return True, message
+        elif trial_value < percentile and not enough_population:
+            message = 'value({}) < percentile({}) but population too small: {} < {} ({} * {} * {} ** {})'.format(
+                trial_value, percentile,
+                population, population_at_step * self.population_growth_brake,
+                self.population_growth_brake, self.initial_population, self.ratio, idx + 1)
+            return False, message
+
+        message = 'value({}) > percentile({}) at epoch({}) with population({})'.format(
+            trial_value, percentile, decisive_epoch, population)
+
+        return False, message
 
     def should_suspend(self, trial_id, epoch):
         # if epoch < self.grace:
@@ -627,7 +640,6 @@ class DynamicPercentileDispatcher:
         start_time = time.time()
         while time.time() - start_time < self.update_timeout:
             if i >= 0:
-                print('sleeping', 2**i)
                 time.sleep(2 ** i)
 
             i += 1
