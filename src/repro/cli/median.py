@@ -1,6 +1,5 @@
 import argparse
 import itertools
-import sys
 
 import mahler.client as mahler
 
@@ -70,6 +69,10 @@ def main(argv=None):
         '--stopping-window-size', default=11, type=int,
         help='Window width to smooth curves.')
     parser.add_argument(
+        '--stopping-growth-brake', default=0.75, type=float,
+        help=('Proportion of trials required to continue, otherwise suspended until population '
+              'reached.'))
+    parser.add_argument(
         '--config-dir-path',
         default=DEFAULT_CONFIG_DIR_PATH,
         help=('Path of directory containing the configurations of the datasets and models. '
@@ -107,7 +110,8 @@ def main(argv=None):
                     final_population=options.final_population,
                     n_steps=options.stopping_n_steps,
                     window_size=options.stopping_window_size,
-                    n_points=options.max_epochs),
+                    n_points=options.max_epochs,
+                    population_growth_brake=options.stopping_growth_brake),
                 variance_samples=dict(
                     seed=options.variance_seed,
                     n_data_sampling=options.n_data_sampling,
