@@ -105,25 +105,36 @@ class DPDRock(cotyledon.Service):
 
         trial_added = self.experiments[tags].add_trial(trial_id, status)
 
-        self.task_timestamp = timestamp
+        self.task_timestamp = report_timestamp
+        trial_timestamp = bson.ObjectId(trial_id)
 
         if self.first_task_timestamp:
-            self.first_task_timestamp = min(self.first_task_timestamp, timestamp)
+            self.first_task_timestamp = min(self.first_task_timestamp, trial_timestamp)
         else:
-            self.first_task_timestamp = timestamp
+            self.first_task_timestamp = trial_timestamp
 
         if self.metric_timestamp:
             self.metric_timestamp = min(self.task_timestamp, self.metric_timestamp)
+
+        self.print('{:>10} {} {} {} {}'.format(
+            'Add' if trial_added else 'Update', trial_id,
+            self.first_task_timestamp, self.task_timestamp, self.metric_timestamp), name=tags)
 
         return trial_added
 
     def add_metric(self, trial_id, metric_id, step, value):
 
-        if trial_id not in self.trials:
+        experiment = self.trials.get(trial_id, None)
+
+        if experiment is None:
             return False
 
-        metric_added = self.trials[trial_id].add_metric(trial_id, step, value)
+        metric_added = experiment.add_metric(trial_id, step, value)
         self.metric_timestamp = metric_id
+
+        self.print('    {:>10} {} {} {} {}'.format(
+            'Add' if metric_added else 'Update',
+            trial_id, step, value, self.metric_timestamp), name=experiment.tags)
 
         return metric_added
 
@@ -183,7 +194,7 @@ class DPDRock(cotyledon.Service):
 
     def backoff(self, changes):
         if changes == 0:
-            sleep_time = min(2 ** self._backoff, 32)
+            sleep_time = min(2 ** self._backoff, 8)
             self.print('No changes. Sleeping for {}sec'.format(sleep_time))
             time.sleep(sleep_time)
             self._backoff += 1
@@ -202,23 +213,30 @@ class DPDFire(DPDRock):
         return self.mahler_client.registrar._db._db
 
     def thaw(self, trial_id, message, tags):
+        self.print('Attempt thaw: {}'.format(message), name=tags)
         task = self.mahler_client._create_shallow_task(trial_id)
         if task.status.name != 'Suspended':
+            self.print('Not suspended, updating status: {}'.format(task.status.name), name=tags)
+            self.trials[trial_id]._trial_status[trial_id] = task.status.name
             return False
         try:
-            self.print(task.id, task.status, name=tags)
-            self.print(message, name=tags)
+            self.print('Attempt re-queuing', name=tags)
             self.mahler_client.resume(task, message)
             self.db_client.tasks.signal_status.find_one_and_update(
                 {'_id': bson.ObjectId(trial_id)}, {'$set': {'status': RUNNING, 'msg': ''}})
+            self.trials[trial_id]._trial_status[trial_id] = 'Queued'
+            self.print('Success', name=tags)
             thawed = True
-        except (ValueError, RaceCondition):
+        except (ValueError, RaceCondition) as e:
+            self.print('Race-condition, abort: {}'.format(str(e)), name=tags)
             thawed = False
 
         return thawed
 
     def thaw_if_possible(self, experiment, trial_id):
+        self.print('Eval {} for thaw'.format(trial_id), name=experiment.tags)
         msg = experiment.should_thaw(trial_id)
+
         if msg:
             return self.thaw(trial_id, msg, experiment.tags)
 
@@ -258,18 +276,15 @@ class DPDIce(DPDRock):
     name = 'dpd-ice'
 
     def suspend_if_needed(self, trial_id, step):
-        msg = self.trials[trial_id].should_suspend(trial_id, step)
+        experiment = self.trials[trial_id]
+        self.print('Eval {} for icing at step {}'.format(trial_id, step), name=experiment.tags)
+        msg = experiment.should_suspend(trial_id, step)
         status = SUSPENDED if msg else RUNNING
+        self.print('Setting status to {}: {}'.format(status, msg), name=experiment.tags)
         self.db_client.tasks.signal_status.find_one_and_update(
             {'_id': bson.ObjectId(trial_id)},
             {'$set': {'status': status, 'msg': msg, 'step': step}},
             upsert=True)
-
-        # TODO: push sparse matrix for distributed updates.
-
-        # print(self.trials)
-        # print(self.metrics)
-        # print(self.best)
 
     def add_metric(self, trial_id, metric_id, step, value):
         metric_added = super(DPDIce, self).add_metric(trial_id, metric_id, step, value)
@@ -346,21 +361,21 @@ class Experiment:
                 if status == 'Suspended']
 
     def add_trial(self, trial_id, status):
-        if trial_id in self.trials:
-            return False
+        added = trial_id not in self.trials
 
-        self.trials[trial_id] = len(self.trials)
+        if added:
+            self.trials[trial_id] = len(self.trials)
+
         self._trial_status[trial_id] = status
 
-        return True
+        return added
 
     def add_metric(self, trial_id, step, value):
-        # TODO: ******* Remove this min hack
-        metric_key = min(self.trials[trial_id], 200)
+        metric_key = self.trials[trial_id]
         new_metric = bool(self.metrics[metric_key][step] < 0)
         self.metrics[metric_key][step] = value
 
-        # NOTE: this will fail if some steps are missing in metrics and have default -1
+        # NOTE: this may fail if some steps are missing in metrics and have default -1
         if step > 1:
             metrics = self.metrics[metric_key][1:step + 1]
             self.smooth_metrics[metric_key][step] = metrics[numpy.where(metrics > 0)].min()
@@ -402,9 +417,10 @@ class Experiment:
         return steps
 
     def should_thaw(self, trial_id):
-        metric_index = min(self.trials[trial_id], 200)
+        metric_index = self.trials[trial_id]
         trial_metrics = self.smooth_metrics[metric_index]
         # We can ignore epoch 0 because it is set to -1
+
         epochs = numpy.where(trial_metrics >= 0)[0]
         if epochs.shape[0] == 0:
             return
