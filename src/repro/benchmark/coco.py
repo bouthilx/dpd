@@ -3,6 +3,7 @@ import logging
 import random
 import copy
 import numpy
+import time
 
 from orion.core.io.space_builder import Space, DimensionBuilder
 
