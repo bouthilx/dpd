@@ -348,10 +348,19 @@ class Experiment:
 
     @property
     def status(self):
-        if all(status in ['Completed', 'Suspended'] for status in self._trial_status.values()):
-            return 'Completed'
+        n_completed = 0
+        n_suspended = 0
+        for status in self._trial_status.values():
+            n_completed += int(status == 'Completed')
+            n_suspended += int(status == 'Suspended')
 
-        return 'Running'
+        print(n_completed, n_suspended, self.initial_population, self.final_population)
+        if ((n_completed < self.final_population) or
+            (n_completed + n_suspended < self.initial_population)):
+
+            return 'Running'
+
+        return 'Completed'
 
     def get_resumable_trials(self):
         if self.status == 'Completed':
