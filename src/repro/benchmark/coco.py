@@ -3,11 +3,11 @@ import logging
 import random
 import copy
 import numpy
-import time
 
 from orion.core.io.space_builder import Space, DimensionBuilder
 
 from repro.utils.distributed import LazyInstantiator, make_pool
+from repro.utils.chrono import Chrono
 from repro.hpo.base import build_hpo
 
 try:
@@ -319,23 +319,6 @@ def build_problem(problem_id, nb_of_dimensions, instance_id):
 # 2.4.a (lower, mid) -> (mid, upper)
 # 2.4.b.o o -> (lower, mid)
 # 2.4.b (mid, upper) -> (lower, mid)
-
-class Chrono:
-    def __init__(self, *args):
-        pass
-
-    def __enter__(self):
-        self.start = time.time()
-        self.end = 0
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.end = time.time()
-        return self
-
-    @property
-    def val(self):
-        return self.end - self.start
 
 
 def hpo_coco(problem_config, space_config, configurator_config, workers=4, previous_tags=None, warm_start=0):
