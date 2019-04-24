@@ -224,7 +224,7 @@ class DPDFire(DPDRock):
             self.mahler_client.resume(task, message)
             self.db_client.tasks.signal_status.find_one_and_update(
                 {'_id': bson.ObjectId(trial_id)}, {'$set': {'status': RUNNING, 'msg': ''}})
-            self.trials[trial_id]._trial_status[trial_id] = 'Queued'
+            self.trials[trial_id]._trial_status[trial_id] = task.get_recent_status().name
             self.print('Success', name=tags)
             thawed = True
         except (ValueError, RaceCondition) as e:
@@ -249,7 +249,10 @@ class DPDFire(DPDRock):
         start_time = time.time()
         for experiment in self.experiments.values():
             self.print('Decisive steps: {}'.format(experiment.get_decisive_steps()), name=experiment.tags)
-            for trial_id in experiment.get_resumable_trials():
+            for trial_id, status in sorted(experiment._trial_status.items()):
+                if status != 'Suspended':
+                    self.print('Do not eval {} for thaw: {}'.format(trial_id, status))
+                    continue
                 thawed += int(self.thaw_if_possible(experiment, trial_id))
 
         self.print('{:10d} trials thawed: {:>5f} seconds'.format(thawed, time.time() - start_time))
@@ -363,13 +366,6 @@ class Experiment:
             return 'Running'
 
         return 'Completed'
-
-    def get_resumable_trials(self):
-        if self.status == 'Completed':
-            return []
-
-        return [trial_id for trial_id, status in self._trial_status.items()
-                if status == 'Suspended']
 
     def add_trial(self, trial_id, status):
         added = trial_id not in self.trials
