@@ -83,7 +83,7 @@ def download(name, url, data_path):
         print("Zip file already downloaded")
         return
 
-    # download 
+    # download
     u = urllib.request.urlopen(url)
     with open(data_path, 'wb') as f:
         file_size = int(dict(u.getheaders())['Content-Length']) / (10.0**6)
@@ -368,12 +368,12 @@ def build_model_config(model_names):
 
         space = copy.deepcopy(space)
         space['weight'] = 'uniform(0, 1)'
-        model_config[model_name][ith_instance] = space 
+        model_config[model_name][ith_instance] = space
 
     return model_config
 
 
-# TODO: 
+# TODO:
 def build_space(model_config):
     space = Space()
     space_config = {}
