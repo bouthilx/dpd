@@ -80,9 +80,9 @@ class DPDRock(cotyledon.Service):
         filepath = os.path.join(self.output, filename)
 
         if filename not in self.files:
-            self.files[filename] = open(filename, 'a')
+            self.files[filename] = open(filepath, 'a')
 
-        f = self.files[out]
+        f = self.files[filename]
 
         print(datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'), '\t', *msg, file=f)
 
