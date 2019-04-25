@@ -126,13 +126,17 @@ def create_trial(config_dir_path, dataset_name, model_name,
     #     Space must be instantiated in the function otherwise its internal RNG state gets copied
     #     every time a task is forked in a process and each of them will start with the exact
     #     same state, leading to identical sampling. What a naughty side effect!
+
+    space_config = (
+        ('optimizer.lr', 'loguniform(1e-5, 0.5)'),
+        ('optimizer.lr_scheduler.patience', 'loguniform(5, 50, discrete=True)'),
+        ('optimizer.lr_scheduler.factor', 'loguniform(0.05, 0.5)'),
+        ('optimizer.momentum', 'uniform(0., 0.9)'),
+        ('optimizer.weight_decay', 'loguniform(1e-8, 1e-3)'))
+
     space = Space()
-    space['optimizer.lr'] = (
-        DimensionBuilder().build('optimizer.lr', 'loguniform(1e-5, 0.5)'))
-    space['optimizer.momentum'] = (
-        DimensionBuilder().build('optimizer.momentum', 'uniform(0., 0.9)'))
-    space['optimizer.weight_decay'] = (
-        DimensionBuilder().build('optimizer.weight_decay', 'loguniform(1e-8, 1e-3)'))
+    for param, prior in space_config:
+        space[param] = DimensionBuilder().build(param, prior)
 
     config = load_config(config_dir_path, dataset_name, model_name)
     config['stopping_rule'] = stopping_rule
