@@ -89,15 +89,16 @@ def register_new_trial(mahler_client, trial_config, tags, container):
     return new_task
 
 
-def sample_new_config(space, config, hpo_seed, global_seed):
+def sample_new_config(space, config, hpo_seed, test_split, global_seed):
     params = unflatten(dict(zip(space.keys(), space.sample(seed=hpo_seed)[0])))
-    params['optimizer']['lr_scheduler'] = dict(patience=10)
+    # params['optimizer']['lr_scheduler'] = dict(patience=10)
+    params['optimizer']['lr_scheduler']['patience'] = int(params['optimizer']['lr_scheduler']['patience'])
     params['model_seed'] = global_seed
     params['sampler_seed'] = global_seed
-    params['patience'] = 30
+    params['patience'] = params['optimizer']['lr_scheduler']['patience'] * 3
     # Params can be all
     new_config = merge(config, params)
-    new_config['data']['seed'] = global_seed
+    new_config['data']['seed'] = (test_split, global_seed)
     return new_config
 
 
@@ -107,7 +108,7 @@ def sample_new_config(space, config, hpo_seed, global_seed):
 @mahler.operator(resources={'cpu': 6, 'mem': '25GB', 'gpu': 1,
                             'usage': {'gpu': {'memory': 0, 'util': 0}}})
 def create_trial(config_dir_path, dataset_name, model_name,
-                 max_epochs, n_trials, stopping_rule, seed, variance_samples):
+                 max_epochs, n_trials, stopping_rule, variance_samples, test_split, seed):
 
     usage = USAGE[model_name]
 
@@ -180,6 +181,7 @@ def create_trial(config_dir_path, dataset_name, model_name,
         # variance trials matches the seed of hpo trials.
         new_task_config = sample_new_config(
             space, config, hpo_seed=int(seeds[len(trials) - 1]),
+            test_split=test_split,
             global_seed=variance_samples['seed'])
         new_task = run.delay(**new_task_config)
         mahler_client.register(new_task, container=container, tags=tags + ['hpo'],
@@ -189,6 +191,8 @@ def create_trial(config_dir_path, dataset_name, model_name,
     # draw bootstrap samples, if any is all completed, register seeds
     assert len(trials) == n_trials
     print('Done.')
+
+    variance_samples['test_split'] = test_split
 
     if not draw_variance_samples(mahler_client, tags, container, trials, **variance_samples):
         if not new_trials:
@@ -224,7 +228,7 @@ def create_trial(config_dir_path, dataset_name, model_name,
 #           - Verify that it is reproducible
 #           - Compare with f32 results
 
-def draw_variance_samples(mahler_client, tags, container, trials, seed,
+def draw_variance_samples(mahler_client, tags, container, trials, seed, test_split,
                           n_data_sampling, n_var_sampling):
     # From trials, sample batches
     # For each batch, test if all trials completed, if not, skip
@@ -254,7 +258,7 @@ def draw_variance_samples(mahler_client, tags, container, trials, seed,
 
     print('Generating trials for variance estimation.')
     sample_distrib(
-        mahler_client, tags, container, seed, params, usage,
+        mahler_client, tags, container, seed, test_split, params, usage,
         n_data_sampling, n_var_sampling)
     print('Done')
 
@@ -314,7 +318,7 @@ def get_best_params(mahler_client, trials):
     return None
 
 
-def sample_distrib(mahler_client, tags, container, seed, params, usage,
+def sample_distrib(mahler_client, tags, container, seed, test_split, params, usage,
                    n_data_sampling, n_var_sampling):
     # if batch seeding < max_seed: sample
     # if all batches seeding >= max_seed: return True
@@ -361,7 +365,7 @@ def sample_distrib(mahler_client, tags, container, seed, params, usage,
 
             params['sampler_seed'] = var_seed
             params['model_seed'] = var_seed
-            params['data']['seed'] = data_seed
+            params['data']['seed'] = (test_split, data_seed)
 
             params['stopping_rule'] = None
 

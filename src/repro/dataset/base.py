@@ -19,19 +19,25 @@ def set_data_path(config):
     config['data_path'] = os.environ.get('REPRO_DATA_PATH', os.getcwd())
 
 
-def generate_indices(n_points, seed=None):
+def generate_indices(n_points, seeds=None):
     n_valid = int(n_points * 0.15)
     n_test = n_valid
     n_train = n_points - n_valid - n_test
 
     indices = list(range(n_points))
-    if seed is not None:
-        rng = numpy.random.RandomState(seed)
+    if seeds:
+        rng = numpy.random.RandomState(seeds[0])
         rng.shuffle(indices)
 
-    train_indices = indices[:n_train]
-    valid_indices = indices[n_train:n_train + n_valid]
+    trainval_indices = indices[:n_train + n_valid]
     test_indices = indices[n_train + n_valid:]
+
+    if seeds and len(seeds) > 1:
+        rng = numpy.random.RandomState(seeds[1])
+        rng.shuffle(trainval_indices)
+
+    train_indices = trainval_indices[:n_train]
+    valid_indices = trainval_indices[n_train:]
 
     return dict(train=train_indices, valid=valid_indices, test=test_indices)
 
