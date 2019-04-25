@@ -7,7 +7,7 @@ import numpy
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
 from ignite.handlers.early_stopping import EarlyStopping
 from ignite.handlers.timing import Timer
-from ignite.metrics import Accuracy, Loss
+from ignite.metrics import Metric, Loss
 
 import torch
 import torch.nn.functional as F
@@ -25,6 +25,70 @@ from repro.utils.flatten import unflatten, merge_configs
 
 
 TIME_BUFFER = 30
+
+
+class ErrorRate(Metric):
+    def reset(self):
+        self._n = 0
+        self._m = 0
+        self._mu = 0
+
+    def update(self, output):
+        y_pred, y = output
+
+        if not (y.ndimension() == y_pred.ndimension() or y.ndimension() + 1 == y_pred.ndimension()):
+            raise ValueError("y must have shape of (batch_size, ...) and y_pred "
+                             "must have shape of (batch_size, num_classes, ...) or "
+                             "(batch_size, ...).")
+
+        if y.ndimension() > 1 and y.shape[1] == 1:
+            y = y.squeeze(dim=1)
+
+        if y_pred.ndimension() > 1 and y_pred.shape[1] == 1:
+            y_pred = y_pred.squeeze(dim=1)
+
+        y_shape = y.shape
+        y_pred_shape = y_pred.shape
+
+        if y.ndimension() + 1 == y_pred.ndimension():
+            y_pred_shape = (y_pred_shape[0], ) + y_pred_shape[2:]
+
+        if not (y_shape == y_pred_shape):
+            raise ValueError("y and y_pred must have compatible shapes.")
+
+        if y_pred.ndimension() == y.ndimension():
+            # Maps Binary Case to Categorical Case with 2 classes
+            y_pred = y_pred.unsqueeze(dim=1)
+            y_pred = torch.cat([1.0 - y_pred, y_pred], dim=1)
+
+        indices = torch.max(y_pred, dim=1)[1]
+        error = 1 - torch.eq(indices, y).view(-1)
+
+        n = self._n
+        m = self._m
+        mean = self._mu
+
+        for x in error:
+            x = float(x)
+            n += 1
+            delta = x - mean
+            mean += delta / n
+            delta2 = x - mean
+            m += delta * delta2
+
+            # mu_nt = mu_n + (x - mu_n) / n
+            # m = m + (x - mu_n) * (x - mu_nt)
+            # mu_n = mu_nt
+
+        self._m = m
+        self._mu = mean
+        self._n = n
+
+    def compute(self):
+        if self._n == 2:
+            raise RuntimeError('ErrorRate must have at least two example before it can be computed')
+
+        return {'mean': self._mu, 'var': self._m / (self._n - 1)}
 
 
 def update(config, arguments):
@@ -94,7 +158,8 @@ def build_experiment(**config):
 
     if lr_scheduler_config:
         lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', patience=lr_scheduler_config['patience'])
+            optimizer, mode='min', patience=lr_scheduler_config['patience'],
+            factor=lr_scheduler_config['factor'], verbose=True)
     else:
         lr_scheduler = None
 
@@ -108,7 +173,7 @@ def build_experiment(**config):
 def build_evaluators(trainer, model, device, patience, compute_test_error_rates):
     def build_evaluator():
         return create_supervised_evaluator(
-            model, metrics={'accuracy': Accuracy(),
+            model, metrics={'error_rate': ErrorRate(),
                             'nll': Loss(F.cross_entropy)},
             device=device)
 
@@ -117,13 +182,13 @@ def build_evaluators(trainer, model, device, patience, compute_test_error_rates)
         evaluators['test'] = build_evaluator()
 
     def score_function(engine):
-        return engine.state.metrics['accuracy']
+        return engine.state.metrics['error_rate']['mean']
 
     early_stopping_handler = EarlyStopping(patience=patience, score_function=score_function,
                                            trainer=trainer)
     evaluators['valid'].add_event_handler(Events.COMPLETED, early_stopping_handler)
 
-    return evaluators
+    return evaluators, early_stopping_handler
 
 
 def main(argv=None):
@@ -188,7 +253,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
         model, optimizer, torch.nn.functional.cross_entropy, device=device)
 
     print('    Evaluator loop')
-    evaluators = build_evaluators(trainer, model, device, patience, compute_test_error_rates)
+    evaluators, early_stopping = build_evaluators(trainer, model, device, patience, compute_test_error_rates)
 
     print('    Stopping rule')
     if stopping_rule:
@@ -210,12 +275,23 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
         metadata = load_checkpoint(loading_file_path, model, optimizer, lr_scheduler)
         if metadata:
             print('Resuming from epoch {}'.format(metadata['epoch']))
+            print('Optimizer:')
+            print('    lr:', optimizer.param_groups[0]['lr'])
+            print('    momentum:', optimizer.param_groups[0]['momentum'])
+            print('    weight decay:', optimizer.param_groups[0]['weight_decay'])
+
             engine.state.epoch = metadata['epoch']
             engine.state.iteration = metadata['iteration']
             for epoch_stats in metadata['all_stats']:
+                tmp = engine.state.metrics
+                engine.state.metrics = epoch_stats['valid']
+                early_stopping(engine)
+                engine.state.metrics = tmp
+
                 all_stats.append(epoch_stats)
                 if (not best_stats or
-                        epoch_stats['valid']['error_rate'] < best_stats['valid']['error_rate']):
+                        (epoch_stats['valid']['error_rate']['mean'] <
+                         best_stats['valid']['error_rate']['mean'])):
                     best_stats.update(epoch_stats)
         else:
             engine.state.epoch = 0
@@ -247,15 +323,27 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
             metrics = evaluator.run(loader).metrics
             stats[name] = dict(
                 loss=metrics['nll'],
-                error_rate=1. - metrics['accuracy'])
+                error_rate= metrics['error_rate'])
 
             if name == 'valid' and stopping_rule:
+                print('Signal stop')
+                print(stats)
                 stopping_rule.signal_step(stats)
 
-        if lr_scheduler:
-            lr_scheduler.step(stats['valid']['error_rate'])
+        print('Early stopping')
+        print('{}   {} < {}'.format(early_stopping.best_score, early_stopping.counter,
+                                    early_stopping.patience))
 
-        if not best_stats or stats['valid']['error_rate'] < best_stats['valid']['error_rate']:
+        current_v_error_rate = stats['valid']['error_rate']['mean']
+        best_v_error_rate = best_stats.get('valid', {}).get('error_rate', {}).get('mean', 100)
+
+        if lr_scheduler:
+            lr_scheduler.step(current_v_error_rate)
+            print('Lr schedule')
+            print('{}   last_epoch: {} bads: {} cooldown: {}'.format(
+                lr_scheduler.best, lr_scheduler.last_epoch, lr_scheduler.num_bad_epochs, lr_scheduler.cooldown_counter))
+
+        if not best_stats or current_v_error_rate < best_v_error_rate:
             best_stats.update(stats)
 
         # TODO: load all tasks with the same tags in mahler, compute the error_rate at that point
@@ -272,8 +360,8 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
         print(("Epoch {:>4} Iteration {:>12} Loss {:>8.3f} "
                "Best-Valid-ER {:>8.4f} Time {:>8.3f}").format(
-            engine.state.epoch, engine.state.iteration, engine.state.output,
-            best_stats['valid']['error_rate'], timer.value()))
+            engine.state.epoch, engine.state.iteration, engine.state.output, best_v_error_rate,
+            timer.value()))
 
         metric_logger.add_metric(stats)
 
