@@ -182,7 +182,7 @@ def build_evaluators(trainer, model, device, patience, compute_test_error_rates)
         evaluators['test'] = build_evaluator()
 
     def score_function(engine):
-        return engine.state.metrics['error_rate']['mean']
+        return 1 - engine.state.metrics['error_rate']['mean']
 
     early_stopping_handler = EarlyStopping(patience=patience, score_function=score_function,
                                            trainer=trainer)
@@ -280,6 +280,11 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
             print('    momentum:', optimizer.param_groups[0]['momentum'])
             print('    weight decay:', optimizer.param_groups[0]['weight_decay'])
 
+            print('LR schedule:')
+            print('    best:', lr_scheduler.best)
+            print('    num_bad_epochs:', lr_scheduler.num_bad_epochs)
+            print('    cooldown:', lr_scheduler.cooldown)
+
             engine.state.epoch = metadata['epoch']
             engine.state.iteration = metadata['iteration']
             for epoch_stats in metadata['all_stats']:
@@ -293,6 +298,10 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
                         (epoch_stats['valid']['error_rate']['mean'] <
                          best_stats['valid']['error_rate']['mean'])):
                     best_stats.update(epoch_stats)
+
+            print('Early stopping:')
+            print('    best_score:', early_stopping.best_score)
+            print('    counter:', early_stopping.counter)
         else:
             engine.state.epoch = 0
             engine.state.iteration = 0
