@@ -313,7 +313,7 @@ def get_best_params(mahler_client, trials):
         if trial.status.name == 'Suspended':
             continue
 
-        objective = trial.output['best']['valid']['error_rate']
+        objective = trial.output['best']['valid']['error_rate']['mean']
         if objective < best_objective:
             best_objective = objective
             best_trial = trial
