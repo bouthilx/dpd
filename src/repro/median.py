@@ -82,6 +82,7 @@ def register_new_trial(mahler_client, trial_config, tags, container):
     trial_config['model_seed'] = random.uniform(1, 10000)
     trial_config['sampler_seed'] = random.uniform(1, 10000)
     model_usage = USAGE[trial_config['model']['name']]
+    model_usage['cpu'] = {'memory': 5 * 2 ** 30, 'util': 200}
     new_task = mahler_client.register(
         run.delay(**trial_config),
         resources={'usage': model_usage}, container=container, tags=tags)
@@ -106,7 +107,8 @@ def sample_new_config(space, config, hpo_seed, test_split, global_seed):
 #       (should submit based on largest request and enable running small tasks in large resource
 #        workers)
 @mahler.operator(resources={'cpu': 6, 'mem': '25GB', 'gpu': 1,
-                            'usage': {'gpu': {'memory': 0, 'util': 0}}})
+                            'usage': {'gpu': {'memory': 0, 'util': 0},
+                                      'cpu': {'memory': 2 ** 30, 'util': 10}}})
 def create_trial(config_dir_path, dataset_name, model_name,
                  max_epochs, n_trials, stopping_rule, variance_samples, test_split, seed):
 
