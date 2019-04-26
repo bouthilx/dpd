@@ -1,56 +1,15 @@
-import copy
+from repro.hpo.trial import Trial
+
+from typing import Callable, Dict
 from queue import Empty as EmptyQueueException
-
-from typing import Optional
 from multiprocessing import Queue, Manager, Process
-from repro.utils.chrono import Chrono
-
-
-class Trial:
-    def __init__(self, task, params, queue: Queue):
-        self.task = task
-        self.kwargs = params
-        self.queue: Queue = queue
-        self.kwargs['queue'] = queue
-        self.process: Optional[Process] = None
-        self.latest_results = None
-
-    def is_alive(self):
-        return self.process.is_alive()
-
-    def has_finished(self):
-        return not self.process.is_alive()
-
-    def is_suspended(self):
-        return self.process is None
-
-    def start(self):
-        self.process = Process(target=self.task, kwargs=self.kwargs)
-        self.process.start()
-
-    def stop(self, safe=False):
-        self.process.terminate()
-        if safe:
-            self.process.join()
-        self.process = None
-
-    def get_last_results(self):
-        return self.latest_results
-
-    def receive(self):
-        obs = []
-        while True:
-            try:
-                obs.append(self.queue.get(True, timeout=0.01))
-            except EmptyQueueException:
-                if len(obs) == 0:
-                    return None
-
-                self.latest_results = tuple(obs)
-                return tuple(obs)
 
 
 def _slow_function_service(slow_fun, in_queue: Queue, out_queue: Queue):
+    """ function to be called inside a subprocess, essentially implement async but with multiprocess
+        the parent process should send arguments to the in_queue the arguments will be passed down to the function
+        to be called.
+    """
     call_id = 0
 
     while True:
@@ -61,14 +20,12 @@ def _slow_function_service(slow_fun, in_queue: Queue, out_queue: Queue):
 
 
 class AbstractDispatcher:
-    """ Manage a series of HPO trials, it can create, suspend and resume those trials
-        in function of the results it is receiving through time
+    """ Manage a series of task - trials, it can create, suspend and resume those trials
+        in function of the results it is receiving/observing through time
      """
 
-    def __init__(self, task, workers):
+    def __init__(self, task: Callable, workers: int):
         """
-
-        :param hpo_algo: Hyper parameter Optimizer, suggest parameters to try and observe current results
         :param task: Task that uses the HPO parameters and return results
         """
         self.manager = Manager()
@@ -118,23 +75,27 @@ class AbstractDispatcher:
             self._shutdown(False)
             raise e
 
-    def _shutdown(self, gracefull=True):
+    def _shutdown(self, gracefully=True) -> None:
         # Close self.param_service
         self.param_service.terminate()
 
         for trial in self.running_trials:
-            if gracefull:
+            if gracefully:
                 trial.process.join()
             else:
                 trial.stop()
 
         self.manager.shutdown()
 
-    def _suggest(self):
-        self.param_input_queue.put({})
+    def _suggest(self) -> None:
+        """ dummy function used to queue an async call to self.suggest """
+        self.param_input_queue.put(self.make_suggest_parameters())
 
-    def start_new_trials(self):
-        """ check if some params are available in the queue, and create a trial if so """
+    def start_new_trials(self) -> int:
+        """ check if some params are available in the queue, and create a trial if so.
+
+            returns the number of started trials """
+
         started = 0
         while True:
             try:
@@ -149,9 +110,12 @@ class AbstractDispatcher:
             except EmptyQueueException:
                 return started
 
-    def receive_and_suspend(self):
+    def receive_and_suspend(self) -> int:
         """ iterates through running trials removing finished ones and
-            checks if the running trials should be suspended  """
+            checks if the running trials should be suspended
+
+            returns the numbers of suspended trials"""
+
         to_be_suspended = set()
         is_finished = set()
 
@@ -159,14 +123,19 @@ class AbstractDispatcher:
             result = trial.receive()
 
             if result is not None and trial.is_alive():
-                if self.should_suspend(trial, result):
+                self.observe(trial, result)
+
+                if self.should_suspend(trial):
+                    trial.stop()
                     to_be_suspended.add(trial)
 
-            elif not trial.is_alive():
+            elif trial.has_finished():
                 is_finished.add(trial)
 
+            elif not trial.is_alive():
+                to_be_suspended.add(trial)
+
         for trial in to_be_suspended:
-            trial.stop()
             self.suspended_trials.add(trial)
             self.running_trials.discard(trial)
 
@@ -177,13 +146,15 @@ class AbstractDispatcher:
 
         return len(to_be_suspended)
 
-    def resume_pending(self, count):
-        """ iterates through the suspended trials and check if they should be resumed """
+    def resume_pending(self, count) -> int:
+        """ iterates through the suspended trials and check if they should be resumed
+
+            returns the numbers of resumed trials """
 
         to_be_resumed = set()
 
         for trial in self.suspended_trials:
-            if self.should_resume(trial, trial.get_last_results()):
+            if self.should_resume(trial):
                 to_be_resumed.add(trial)
 
                 if len(to_be_resumed) == count:
@@ -196,93 +167,25 @@ class AbstractDispatcher:
 
         return len(to_be_resumed)
 
-    def should_resume(self, trial, result):
-        return False
+    def make_suggest_parameters(self) -> Dict[str, any]:
+        """ return the parameters needed by `self.suggest`"""
+        return {}
 
-    def should_suspend(self, trial, result):
-        return False
-
-    def suggest(self):
+    def should_resume(self, trial) -> bool:
         raise NotImplementedError()
 
-    def observe(self, trial, result):
+    def should_suspend(self, trial) -> bool:
         raise NotImplementedError()
 
-    def is_completed(self):
+    def suggest(self, **kwargs) -> Dict[str, any]:
+        """return a dictionary of parameters to use for the `self.task`"""
         raise NotImplementedError()
 
+    def observe(self, trial, result) -> None:
+        raise NotImplementedError()
 
-if __name__ == '__main__':
-    import time
-
-    def sample_params(hpo_algo, obs, seed):
-        conf = copy.deepcopy(hpo_algo)
-        conf.observe(obs)
-
-        with Chrono('hpo_time') as timer:
-            hpo_algo.get_parans(seed=seed)
-            params = conf.get_params(seed=seed)
-
-        params['hpo_time'] = timer
-        return params
-
-
-    class DefaultDispatcher(AbstractDispatcher):
-        suggest_id = 0
-        observe_id = 0
-
-        def suggest(self):
-            with Chrono('hpo_time') as timer:
-                self.suggest_id += 1
-                print(f'Suggesting {self.suggest_id}')
-                time.sleep(1)
-            return {'suggest_random': self.suggest_id, 'hpo_time': timer.val}
-
-        def observe(self, trial, result):
-            self.observe_id += 1
-            print(f'Observing: {self.observe_id} {result}')
-
-        def is_completed(self):
-            return len(self.finished_trials) >= 10
-
-        def should_suspend(self, trial, result):
-            print(f'Should suspend {result}')
-            return False
-
-        def should_resume(self, trial, result):
-            return False
-
-
-    def my_task(suggest_random, queue, hpo_time):
-        print(f'Working on {suggest_random}')
-        queue.put({
-            'params': (('arg1', 0), ('arg2', 0)),
-            'objective': 100,
-            'hpo_time': hpo_time,
-            'exec_time': 5
-        })
-
-        time.sleep(5)
-
-        queue.put({
-            'params': (('arg1', 0), ('arg2', 0)),
-            'objective': 100,
-            'hpo_time': hpo_time,
-            'exec_time': 10
-        })
-
-        time.sleep(5)
-
-
-    dispatcher = DefaultDispatcher(my_task, 10)
-    dispatcher.run()
-
-    for trial in dispatcher.finished_trials:
-        print(f'Trial: {trial.kwargs}')
-        for result in trial.get_last_results():
-            print(f'    - {result}')
-
-
+    def is_completed(self) -> bool:
+        raise NotImplementedError()
 
 
 
