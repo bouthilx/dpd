@@ -1,6 +1,7 @@
+import copy
 from repro.hpo.trial import Trial
 
-from typing import Callable, Dict
+from typing import Callable, Dict, List
 from queue import Empty as EmptyQueueException
 from multiprocessing import Queue, Manager, Process
 
@@ -181,18 +182,58 @@ class AbstractDispatcher:
         """return a dictionary of parameters to use for the `self.task`"""
         raise NotImplementedError()
 
-    def observe(self, trial, result) -> None:
+    def observe(self, trial, results: List[Dict[str, any]]) -> None:
         raise NotImplementedError()
 
     def is_completed(self) -> bool:
         raise NotImplementedError()
 
 
+class HPODispatcher(AbstractDispatcher):
 
+    def __init__(self, hpo, task: Callable, workers: int):
+        super(HPODispatcher, self).__init__(task, workers)
+        self.hpo = hpo
+        self.trial_count = 0
+        self.seeds = []
+        self.pending_observe = False    # We need more observation to sample different parameters
+        self.last_params = None          # Last parameters that were sampled
 
+    def should_resume(self, trial) -> bool:
+        return not trial.has_finished()
 
+    def should_suspend(self, trial) -> bool:
+        return False
 
+    def make_suggest_parameters(self) -> Dict[str, any]:
+        """ return the parameters needed by `self.suggest`"""
+        kwargs = dict(seed=self.seeds[self.trial_count])
+        if self.pending_observe:
+            kwargs['observation'] = [dict(params=self.last_params, objective=99999)]
 
+        self.pending_observe = True
+        self.last_params = kwargs
+        return kwargs
+
+    def suggest(self, seed, observations) -> Dict[str, any]:
+        if observations is None:
+            self.trial_count += 1
+            self.last_params = self.hpo.get_params(seed=seed)
+            return self.last_params
+
+        configurator = copy.deepcopy(self.hpo)
+        configurator.observe(observations)
+
+        self.hpo.get_params(seed)
+        self.last_params = configurator.get_params(seed=seed)
+        return self.last_params
+
+    def observe(self, trial, results) -> None:
+        self.hpo.observe([dict(params=trial.params, objective=result['objective']) for result in results])
+        self.pending_observe = False
+
+    def is_completed(self) -> bool:
+        return self.hpo.is_completed() or self.trial_count >= self.hpo.max_trial
 
 
 

@@ -1,3 +1,4 @@
+import copy
 from queue import Empty as EmptyQueueException
 from multiprocessing import Queue, Process
 from typing import Optional, Callable, Dict, Tuple
@@ -8,6 +9,7 @@ class Trial:
         in progress or resume it if it was suspended """
     def __init__(self, task: Callable[[Dict[str, any]], None], params: Dict[str, any], queue: Queue):
         self.task = task
+        self.params = copy.deepcopy(params)
         self.kwargs = params
         self.queue: Queue = queue
         self.kwargs['queue'] = queue
