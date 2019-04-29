@@ -1,15 +1,35 @@
 import copy
-from collections import defaultdict
-import itertools
 import uuid
+import numpy
+import itertools
+
+from collections import defaultdict
+from typing import Callable, Dict, Tuple
+from queue import Empty as EmptyQueueException
+
+
 from repro.hpo.dispatcher.trial import Trial
 from repro.hpo.configurator.base import build_configurator
+from repro.utils.resumable import resume
 
-import numpy
 
-from typing import Callable, Dict
-from queue import Empty as EmptyQueueException
 from multiprocessing import Queue, Manager, Process
+
+
+def fix_python_mp():
+    # https://stackoverflow.com/questions/46779860/multiprocessing-managers-and-custom-classes
+    # Backup original AutoProxy function
+    import multiprocessing.managers as managers
+    backup_autoproxy = managers.AutoProxy
+
+    def redefined_autoproxy(token, serializer, manager=None, authkey=None, exposed=None, incref=True, manager_owned=True):
+        # Calling original AutoProxy without the unwanted key argument
+        return backup_autoproxy(token, serializer, manager, authkey,  exposed, incref)
+
+    managers.AutoProxy = redefined_autoproxy
+
+
+fix_python_mp()
 
 
 def _slow_function_service(slow_fun, in_queue: Queue, out_queue: Queue):
@@ -30,6 +50,15 @@ class HPOManager:
     """ Manage a series of task - trials, it can create, suspend and resume those trials
         in function of the results it is receiving/observing through time
      """
+
+    # Attributes to save to make a resumable object
+    __state_attributes__ = {
+        'trial_count',
+        'running_trials',
+        'suspended_trials',
+        'finished_trials',
+        'dispatcher'
+    }
 
     def __init__(self, dispatcher, task: Callable, max_trials: int, workers: int):
         """
@@ -54,6 +83,24 @@ class HPOManager:
         )
         self.pending_params = 0
         self.trial_count = 0
+
+    def resume(self, state: Dict[str, any]):
+        def make_trial(trial_state, queue):
+            t = Trial(trial_state['id'], self.task, trial_state['params'], queue)
+            t.latest_results = trial_state['latest_results']
+            return t
+
+        self.dispatcher = resume(self.dispatcher, state['dispatcher'])
+        self.trial_count = state['trial_count']
+
+        self.running_trials = {make_trial(t, self.manager.Queue()) for t in state['running_trials']}
+        self.suspended_trials = {make_trial(t, self.manager.Queue()) for t in state['suspended_trials']}
+        self.finished_trials = {make_trial(t, None) for t in state['finished_trials']}
+
+        for trial in self.running_trials:
+            trial.start()
+
+        return self
 
     @property
     def trials(self):
@@ -188,9 +235,19 @@ class HPOManager:
         return len(to_be_resumed)
 
 
-class HPODispatcher:
+# hpo = HPODispatcher.from_dict(....)
 
-    def __init__(self, space, configurator_config, max_trials, seed=1):
+class HPODispatcher:
+    __state_attributes__ = {
+        'trial_count',
+        'seeds',
+        'observations',
+        'buffered_observations',
+        'finished',
+        'params'
+    }
+
+    def __init__(self, space: 'Space', configurator_config: Dict[str, any], max_trials: int, seed=1):
         self.space = space
         self.configurator_config = configurator_config
         self.trial_count = 0
@@ -200,6 +257,11 @@ class HPODispatcher:
         self.buffered_observations = []
         self.finished = set()
         self.max_trials = max_trials
+
+    def resume(self, state: Dict[str, any]):
+        resume(self, state, default=True)
+        self.finished = set(self.finished)
+        return self
 
     def should_resume(self, trial) -> bool:
         return not trial.has_finished()
@@ -228,7 +290,7 @@ class HPODispatcher:
 
         return kwargs
 
-    def receive_and_suggest(self, trial_id, buffered_observations, seed) -> Dict[str, any]:
+    def receive_and_suggest(self, trial_id, buffered_observations, seed) -> Tuple[str, Dict[str, any]]:
 
         for observation in buffered_observations:
             self._observe(**observation)
@@ -272,7 +334,7 @@ class HPODispatcher:
     def is_completed(self) -> bool:
         return self.hpo.is_completed() or self.trial_count >= self.hpo.max_trial
 
-    def get_objective(self, trial_id: str) -> int:
+    def get_objective(self, trial_id: str) -> Tuple[int, Dict[str, any]]:
         steps = self.observations[trial_id].keys()
         if not steps:
             return None, None
@@ -280,3 +342,5 @@ class HPODispatcher:
         last_step = max(steps)
 
         return last_step, self.observations[trial_id][last_step]
+
+

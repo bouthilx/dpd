@@ -1,19 +1,28 @@
 import time
+import json
 
 from repro.utils.chrono import Chrono
+from repro.utils.resumable import state, resume
 from repro.hpo.dispatcher.dispatcher import HPOManager, HPODispatcher
 
 
-class TestDispatcher(HPODispatcher):
+mock_sleep = 10
+suggest_sleep = 1
+
+
+class MockDispatcher(HPODispatcher):
     suggest_id = 0
     observe_id = 0
     observed = []
+
+    def __init__(self, max_trials):
+        super(MockDispatcher, self).__init__(None, {}, max_trials)
 
     def suggest(self, seed):
         with Chrono('hpo_time') as timer:
             print(f'Suggesting {self.suggest_id}')
             self.suggest_id += 1
-            time.sleep(1)
+            time.sleep(suggest_sleep)
         return {'suggest_random': self.suggest_id, 'hpo_time': timer.val}
 
     def observe(self, trial, result):
@@ -21,10 +30,14 @@ class TestDispatcher(HPODispatcher):
         self.observed.append(result[-1].get('objective'))
         self.suggest_id += result[-1].get('objective')
         print(f'Observing: {self.observe_id} {result}')
-        super(TestDispatcher, self).observe(trial, result)
+
+        if trial.has_finished():
+            self.finished.add(trial.id)
+
+        super(MockDispatcher, self).observe(trial, result)
 
     def is_completed(self):
-        return len(self.finished) >= 10
+        return len(self.finished) >= self.max_trials
 
     def should_suspend(self, trial):
         # print(f'Should suspend')
@@ -34,7 +47,7 @@ class TestDispatcher(HPODispatcher):
         return False
 
 
-def test_task(suggest_random, hpo_time, callback):
+def mock_task(suggest_random, hpo_time, callback):
     print(f'Working on {suggest_random}')
 
     callback(**{
@@ -46,7 +59,7 @@ def test_task(suggest_random, hpo_time, callback):
         'finished': False
     })
 
-    time.sleep(10)
+    time.sleep(mock_sleep)
     suggest_random += 1
 
     callback(**{
@@ -59,17 +72,55 @@ def test_task(suggest_random, hpo_time, callback):
     })
 
 
-def test_dispatcher():
+def run_mock_dispatcher():
+    global mock_sleep, suggest_sleep
+    mock_sleep = 1
+    suggest_sleep = 1
     max_tasks = 10
 
-    dispatcher = TestDispatcher(None, dict(name='random_search'), max_trials=max_tasks, seed=1)
-    manager = HPOManager(dispatcher, test_task, max_trials=max_tasks, workers=5)
+    dispatcher = MockDispatcher(max_tasks)
+    manager = HPOManager(dispatcher, mock_task, max_trials=max_tasks, workers=5)
     manager.run()
+
     print(manager.trial_count)
     print(dispatcher.finished)
     print(len(dispatcher.finished))
+
     assert dispatcher.observed[-1] == max_tasks + 1
 
 
+def run_mock_suspend_resume():
+    import numpy
+
+    max_tasks_real = 10
+    seeds = numpy.random.RandomState(0).randint(0, 100000, size=(max_tasks_real,))
+
+    def start_and_suspend():
+        max_tasks = 5
+        dispatcher = MockDispatcher(max_tasks)
+        dispatcher.seeds = seeds
+
+        manager = HPOManager(dispatcher, mock_task, max_trials=max_tasks, workers=5)
+        manager.run()
+        return state(manager)
+
+    def resume_and_finish(manager_state):
+        max_tasks = max_tasks_real
+        dispatcher = MockDispatcher(max_tasks)
+        manager = HPOManager(dispatcher, mock_task, max_trials=max_tasks, workers=5)
+
+        manager = resume(manager, manager_state)
+        manager.run()
+
+        return dispatcher
+
+    s = start_and_suspend()
+
+    print(json.dumps(s, indent=2))
+
+    dispatcher = resume_and_finish(s)
+
+
 if __name__ == '__main__':
-    test_dispatcher()
+    # run_mock_dispatcher()
+    run_mock_suspend_resume()
