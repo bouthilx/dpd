@@ -1,15 +1,21 @@
 import copy
-from repro.hpo.trial import Trial
+from collections import defaultdict
+import itertools
+import uuid
+from repro.hpo.dispatcher.trial import Trial
+from repro.hpo.configurator.base import build_configurator
 
-from typing import Callable, Dict, List
+import numpy
+
+from typing import Callable, Dict
 from queue import Empty as EmptyQueueException
 from multiprocessing import Queue, Manager, Process
 
 
 def _slow_function_service(slow_fun, in_queue: Queue, out_queue: Queue):
     """ function to be called inside a subprocess, essentially implement async but with multiprocess
-        the parent process should send arguments to the in_queue the arguments will be passed down to the function
-        to be called.
+        the parent process should send arguments to the in_queue the arguments will be passed down
+        to the function to be called.
     """
     call_id = 0
 
@@ -20,18 +26,21 @@ def _slow_function_service(slow_fun, in_queue: Queue, out_queue: Queue):
         out_queue.put(result)
 
 
-class AbstractDispatcher:
+class HPOManager:
     """ Manage a series of task - trials, it can create, suspend and resume those trials
         in function of the results it is receiving/observing through time
      """
 
-    def __init__(self, task: Callable, workers: int):
+    def __init__(self, dispatcher, task: Callable, max_trials: int, workers: int):
         """
         :param task: Task that uses the HPO parameters and return results
         """
         self.manager = Manager()
         self.task = task
+        self.max_trials = max_trials
         self.workers = workers
+
+        self.dispatcher = dispatcher
 
         self.running_trials = set()
         self.suspended_trials = set()
@@ -41,19 +50,25 @@ class AbstractDispatcher:
         self.param_output_queue: Queue = self.manager.Queue()
         self.param_service = Process(
             target=_slow_function_service,
-            args=(self.suggest, self.param_input_queue, self.param_output_queue)
+            args=(dispatcher.receive_and_suggest, self.param_input_queue, self.param_output_queue)
         )
         self.pending_params = 0
+        self.trial_count = 0
+
+    @property
+    def trials(self):
+        return itertools.chain(self.suspended_trials, self.running_trials, self.finished_trials)
 
     def run(self):
         self.param_service.start()
 
         try:
             while True:
-                # receive the latest results from the trials & check if some trials need to be suspended
+                # receive the latest results from the trials & check if some trials need to be
+                # suspended
                 suspended_count = self.receive_and_suspend()
 
-                if self.is_completed():
+                if self.dispatcher.is_completed():
                     break
 
                 # if so check if one needs to be resumed
@@ -63,13 +78,14 @@ class AbstractDispatcher:
                 started_count = self.start_new_trials()
 
                 # Create new trial if we don't have enough
-                missing = self.workers - (suspended_count - resumed_count - started_count)
+                missing = self.workers - len(self.running_trials)  # (suspended_count - resumed_count - started_count)
                 missing -= self.pending_params
+                missing = min(self.max_trials - self.trial_count, missing)
 
-                if missing > 0:
-                    for i in range(0, missing):
-                        self._suggest()
-                        self.pending_params += 1
+                if missing > 0 and self.pending_params < 1:
+                    self._queue_suggest()
+                    self.pending_params = 1
+                    self.trial_count += 1
 
             self._shutdown()
         except Exception as e:
@@ -88,9 +104,9 @@ class AbstractDispatcher:
 
         self.manager.shutdown()
 
-    def _suggest(self) -> None:
+    def _queue_suggest(self) -> None:
         """ dummy function used to queue an async call to self.suggest """
-        self.param_input_queue.put(self.make_suggest_parameters())
+        self.param_input_queue.put(self.dispatcher.make_suggest_parameters())
 
     def start_new_trials(self) -> int:
         """ check if some params are available in the queue, and create a trial if so.
@@ -100,11 +116,11 @@ class AbstractDispatcher:
         started = 0
         while True:
             try:
-                params = self.param_output_queue.get(True, timeout=0.01)
+                trial_id, params = self.param_output_queue.get(True, timeout=0.01)
                 self.pending_params -= 1
                 started += 1
 
-                trial = Trial(self.task, params, self.manager.Queue())
+                trial = Trial(trial_id, self.task, params, self.manager.Queue())
                 trial.start()
                 self.running_trials.add(trial)
 
@@ -123,25 +139,28 @@ class AbstractDispatcher:
         for trial in self.running_trials:
             result = trial.receive()
 
-            if result is not None and trial.is_alive():
-                self.observe(trial, result)
+            if result is not None:
+                self.dispatcher.observe(trial, result)
 
-                if self.should_suspend(trial):
-                    trial.stop()
-                    to_be_suspended.add(trial)
+            if trial.is_alive() and self.dispatcher.should_suspend(trial):
+                trial.stop()
+                to_be_suspended.add(trial)
 
             elif trial.has_finished():
                 is_finished.add(trial)
 
+            # Trial was lost
             elif not trial.is_alive():
-                to_be_suspended.add(trial)
+                if self.dispatcher.should_suspend(trial):
+                    to_be_suspended.add(trial)
+                else:
+                    trial.start()
 
         for trial in to_be_suspended:
             self.suspended_trials.add(trial)
             self.running_trials.discard(trial)
 
         for trial in is_finished:
-            self.observe(trial, trial.get_last_results())
             self.finished_trials.add(trial)
             self.running_trials.discard(trial)
 
@@ -155,7 +174,7 @@ class AbstractDispatcher:
         to_be_resumed = set()
 
         for trial in self.suspended_trials:
-            if self.should_resume(trial):
+            if self.dispatcher.should_resume(trial):
                 to_be_resumed.add(trial)
 
                 if len(to_be_resumed) == count:
@@ -168,36 +187,19 @@ class AbstractDispatcher:
 
         return len(to_be_resumed)
 
-    def make_suggest_parameters(self) -> Dict[str, any]:
-        """ return the parameters needed by `self.suggest`"""
-        return {}
 
-    def should_resume(self, trial) -> bool:
-        raise NotImplementedError()
+class HPODispatcher:
 
-    def should_suspend(self, trial) -> bool:
-        raise NotImplementedError()
-
-    def suggest(self, **kwargs) -> Dict[str, any]:
-        """return a dictionary of parameters to use for the `self.task`"""
-        raise NotImplementedError()
-
-    def observe(self, trial, results: List[Dict[str, any]]) -> None:
-        raise NotImplementedError()
-
-    def is_completed(self) -> bool:
-        raise NotImplementedError()
-
-
-class HPODispatcher(AbstractDispatcher):
-
-    def __init__(self, hpo, task: Callable, workers: int):
-        super(HPODispatcher, self).__init__(task, workers)
-        self.hpo = hpo
+    def __init__(self, space, configurator_config, max_trials, seed=1):
+        self.space = space
+        self.configurator_config = configurator_config
         self.trial_count = 0
-        self.seeds = []
-        self.pending_observe = False    # We need more observation to sample different parameters
-        self.last_params = None          # Last parameters that were sampled
+        self.seeds = numpy.random.RandomState(seed).randint(0, 100000, size=(max_trials, ))
+        self.observations = defaultdict(dict)
+        self.params = dict()
+        self.buffered_observations = []
+        self.finished = set()
+        self.max_trials = max_trials
 
     def should_resume(self, trial) -> bool:
         return not trial.has_finished()
@@ -207,34 +209,74 @@ class HPODispatcher(AbstractDispatcher):
 
     def make_suggest_parameters(self) -> Dict[str, any]:
         """ return the parameters needed by `self.suggest`"""
-        kwargs = dict(seed=self.seeds[self.trial_count])
-        if self.pending_observe:
-            kwargs['observation'] = [dict(params=self.last_params, objective=99999)]
+        kwargs = dict(
+            trial_id=uuid.uuid4().hex,
+            seed=self.seeds[self.trial_count],
+            buffered_observations=self.buffered_observations)
 
-        self.pending_observe = True
-        self.last_params = kwargs
+        # Pre-registering bad result. This is necessary so that batch of async calls inform algos of
+        # previous call that are not completed yet. We don't know
+        worst_objectives = 99999
+        for objectives in self.observations.values():
+            last_step = max(objectives.keys())
+            worst_objectives = max(objectives[last_step], worst_objectives)
+
+        self.buffered_observations = []
+        self._observe(trial_id=kwargs['trial_id'], params=None, step=-1, objective=worst_objectives)
+
+        self.trial_count += 1
+
         return kwargs
 
-    def suggest(self, seed, observations) -> Dict[str, any]:
-        if observations is None:
-            self.trial_count += 1
-            self.last_params = self.hpo.get_params(seed=seed)
-            return self.last_params
+    def receive_and_suggest(self, trial_id, buffered_observations, seed) -> Dict[str, any]:
 
-        configurator = copy.deepcopy(self.hpo)
-        configurator.observe(observations)
+        for observation in buffered_observations:
+            self._observe(**observation)
 
-        self.hpo.get_params(seed)
-        self.last_params = configurator.get_params(seed=seed)
-        return self.last_params
+        params = self.params[trial_id] = self.suggest(seed)
+
+        return trial_id, params
+
+    def suggest(self, seed) -> Dict[str, any]:
+        self.trial_count += 1
+        return self.build_configurator().get_params(seed=seed)
+
+    def build_configurator(self):
+        configurator = build_configurator(self.space, **self.configurator_config)
+
+        for trial_id, observations in self.observations.items():
+            _, objective = self.get_objective(trial_id)
+
+            if objective is None:
+                raise RuntimeError(f'Preregistration failed for trial {trial_id}')
+
+            configurator.observe(self.params[trial_id], objective)
+
+        return configurator
 
     def observe(self, trial, results) -> None:
-        self.hpo.observe([dict(params=trial.params, objective=result['objective']) for result in results])
-        self.pending_observe = False
+
+        for result in results:
+            observation = copy.deepcopy(result)
+            observation.update({'trial_id': trial.id, 'params': trial.params})
+            self.buffered_observations.append(observation)
+            self._observe(**observation)
+
+    def _observe(self, trial_id, params, step, objective, finished=False, **kwargs):
+        if finished:
+            self.finished.add(trial_id)
+
+        self.params[trial_id] = params
+        self.observations[trial_id][step] = objective
 
     def is_completed(self) -> bool:
         return self.hpo.is_completed() or self.trial_count >= self.hpo.max_trial
 
+    def get_objective(self, trial_id: str) -> int:
+        steps = self.observations[trial_id].keys()
+        if not steps:
+            return None, None
 
+        last_step = max(steps)
 
-
+        return last_step, self.observations[trial_id][last_step]
