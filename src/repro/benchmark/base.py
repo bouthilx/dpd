@@ -11,7 +11,8 @@ def build_benchmark(name=None, **kwargs):
 def build_benchmark_subparsers(subparsers):
     benchmark_subparsers = []
     for name in factories.keys():
-        benchmark_subparsers.append(factories[name]().add_subparser(subparsers))
+        benchmark = factories[name]()
+        benchmark_subparsers.append(benchmark.add_subparser(subparsers))
 
     return benchmark_subparsers
 

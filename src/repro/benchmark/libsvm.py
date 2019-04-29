@@ -102,6 +102,7 @@ def download(name, url, data_path):
 
 
 def load_dataset_names():
+    return []
     fp = urllib.request.urlopen("https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/")
     mybytes = fp.read()
 
@@ -172,7 +173,6 @@ class LIBSVMBenchmark:
                                       nargs='*')
         benchmark_parser.add_argument('--scenarios', choices=self.scenarios, type=str, nargs='*')
         benchmark_parser.add_argument('--warm-start', type=int, default=50)
-        benchmark_parser.add_argument('--max-trials', type=int, default=50)
 
         return benchmark_parser
 
@@ -411,7 +411,7 @@ SPACES = dict(
             leaf_size='uniform(1, 100, discrete=True)',
             p='uniform(1, 3, discrete=True)',
             metric='choices(["euclidean", "manhattan", "chebyshev", "minkowski"])')
-    }
+    },
     SVC={
         0: dict(
             kernel='linear',
@@ -473,7 +473,6 @@ SPACES = dict(
             solver='sgd',
             hidden_layer_sizes='loguniform(10, 1000, discrete=True, shape=2)', # 2-layers
             activation='choices(["identity", "logistic", "tanh", "relu"])',
-            solver='sgd',
             momentum='uniform(0.8, 0.9999)',
             learning_rate='choices(["constant", "adaptive"])',
             learning_rate_init='loguniform(1e-5, 1)',
@@ -482,7 +481,6 @@ SPACES = dict(
             solver='adam',
             hidden_layer_sizes='loguniform(10, 1000, discrete=True, shape=2)',
             activation='choices(["identity", "logistic", "tanh", "relu"])',
-            solver='adam',
             beta_1='uniform(0.8, 0.9999)',
             beta_2='uniform(0.9, 0.9999)',
             learning_rate='choices(["constant", "adaptive"])',

@@ -6,8 +6,6 @@ from orion.core.io.space_builder import Space, DimensionBuilder
 
 import numpy
 
-from repro.hpo.base import build_hpo
-
 from repro.utils.flatten import flatten, unflatten
 
 try:
