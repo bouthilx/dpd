@@ -1,4 +1,7 @@
 import copy
+from collections import defaultdict
+import itertools
+import logging
 import uuid
 import numpy
 import itertools
@@ -12,6 +15,9 @@ from repro.hpo.configurator.base import build_configurator
 from repro.utils.checkpoint import CheckPointer
 
 from multiprocessing import Queue, Manager, Process
+
+
+logger = logging.getLogger(__name__)
 
 
 def fix_python_mp():
@@ -96,6 +102,7 @@ class HPOManager:
                 suspended_count = self.receive_and_suspend()
 
                 if self.dispatcher.is_completed():
+                    logging.info('HPO completed. Breaking out of run loop.')
                     break
 
                 # if so check if one needs to be resumed
@@ -121,6 +128,8 @@ class HPOManager:
         except Exception as e:
             self._shutdown(False)
             raise e
+
+        logger.info('HPO completed')
 
     def _shutdown(self, gracefully=True) -> None:
         # Close self.param_service
@@ -152,6 +161,7 @@ class HPOManager:
 
                 trial = Trial(trial_id, self.task, params, self.manager.Queue())
                 trial.start()
+                logger.info(f'{trial.id} started')
                 self.running_trials.add(trial)
 
             except EmptyQueueException:
@@ -172,19 +182,19 @@ class HPOManager:
             if result is not None:
                 self.dispatcher.observe(trial, result)
 
-            if trial.is_alive() and self.dispatcher.should_suspend(trial):
+            if trial.is_alive() and self.dispatcher.should_suspend(trial.id):
                 trial.stop()
+                logger.info(f'{trial.id} suspended {trial.get_last_results()[-1]["objective"]}')
                 to_be_suspended.add(trial)
 
             elif trial.has_finished():
+                logger.info(f'{trial.id} completed {trial.get_last_results()[-1]["objective"]}')
                 is_finished.add(trial)
 
             # Trial was lost
             elif not trial.is_alive():
-                if self.dispatcher.should_suspend(trial):
-                    to_be_suspended.add(trial)
-                else:
-                    trial.start()
+                logger.info(f'{trial.id} lost {trial.get_last_results()[-1]["objective"]}')
+                to_be_suspended.add(trial)
 
         for trial in to_be_suspended:
             self.suspended_trials.add(trial)
@@ -204,7 +214,7 @@ class HPOManager:
         to_be_resumed = set()
 
         for trial in self.suspended_trials:
-            if self.dispatcher.should_resume(trial):
+            if self.dispatcher.should_resume(trial.id):
                 to_be_resumed.add(trial)
 
                 if len(to_be_resumed) == count:
@@ -213,6 +223,7 @@ class HPOManager:
         for trial in to_be_resumed:
             self.suspended_trials.discard(trial)
             trial.start()
+            logger.info(f'{trial.id} resumed {trial.get_last_results()[-1]["objective"]}')
             self.running_trials.add(trial)
 
         return len(to_be_resumed)
@@ -230,11 +241,11 @@ class HPODispatcher:
         self.finished = set()
         self.max_trials = max_trials
 
-    def should_resume(self, trial) -> bool:
-        return not trial.has_finished()
+    def should_resume(self, trial_id) -> bool:
+        raise NotImplementedError()
 
-    def should_suspend(self, trial) -> bool:
-        return False
+    def should_suspend(self, trial_id) -> bool:
+        raise NotImplementedError()
 
     def make_suggest_parameters(self) -> Dict[str, any]:
         """ return the parameters needed by `self.suggest`"""
@@ -245,10 +256,16 @@ class HPODispatcher:
 
         # Pre-registering bad result. This is necessary so that batch of async calls inform algos of
         # previous call that are not completed yet. We don't know
-        worst_objectives = 99999
+        worst_objectives = -float('inf')
+        empty = True
         for objectives in self.observations.values():
             last_step = max(objectives.keys())
-            worst_objectives = max(objectives[last_step], worst_objectives)
+            if last_step >= 0:
+                worst_objectives = max(objectives[last_step], worst_objectives)
+                empty = False
+
+        if empty:
+            worst_objectives = 99999
 
         self.buffered_observations = []
         self._observe(trial_id=kwargs['trial_id'], params=None, step=-1, objective=worst_objectives)
@@ -309,5 +326,3 @@ class HPODispatcher:
         last_step = max(steps)
 
         return last_step, self.observations[trial_id][last_step]
-
-
