@@ -1,4 +1,5 @@
 import copy
+import datetime
 import functools
 import uuid
 from queue import Empty as EmptyQueueException
@@ -40,6 +41,7 @@ class Trial:
         self.kwargs['callback'] = functools.partial(callback, queue=queue)
         self.process: Optional[Process] = None
         self.latest_results = None
+        self.creation_time = datetime.datetime.utcnow()
 
     def is_alive(self) -> bool:
         return self.process and self.process.is_alive()
