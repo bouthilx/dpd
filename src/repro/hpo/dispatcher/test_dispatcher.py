@@ -2,9 +2,9 @@ import time
 import json
 
 from repro.utils.chrono import Chrono
-from repro.utils.resumable import state, resume
+from repro.utils.resumable import resume
 from repro.hpo.dispatcher.dispatcher import HPOManager, HPODispatcher
-
+from repro.utils.checkpoint import resume_from_checkpoint
 
 mock_sleep = 10
 suggest_sleep = 1
@@ -102,25 +102,27 @@ def run_mock_suspend_resume():
         dispatcher.seeds = seeds
 
         manager = HPOManager(dispatcher, mock_task, max_trials=max_tasks, workers=5)
+        manager.enable_checkpoints(
+            name='test_hpo',
+            every=1,
+            archive_folder='/tmp/checkpoints/repro/'
+        )
         manager.run()
-        return state(manager)
 
-    def resume_and_finish(manager_state):
+    def resume_and_finish():
         max_tasks = max_tasks_real
 
         dispatcher = MockDispatcher(max_tasks)
         manager = HPOManager(dispatcher, mock_task, max_trials=max_tasks, workers=5)
 
-        manager = resume(manager, manager_state)
+        manager = resume_from_checkpoint(manager, '/tmp/checkpoints/repro/test_hpo.json')
         manager.run()
 
         return dispatcher
 
-    s = start_and_suspend()
+    start_and_suspend()
 
-    print(json.dumps(s, indent=2))
-
-    dispatcher = resume_and_finish(s)
+    dispatcher = resume_and_finish()
 
 
 if __name__ == '__main__':

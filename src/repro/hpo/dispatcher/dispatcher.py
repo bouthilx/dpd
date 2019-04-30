@@ -9,6 +9,7 @@ from queue import Empty as EmptyQueueException
 
 from repro.hpo.dispatcher.trial import Trial
 from repro.hpo.configurator.base import build_configurator
+from repro.utils.checkpoint import CheckPointer
 
 from multiprocessing import Queue, Manager, Process
 
@@ -70,6 +71,16 @@ class HPOManager:
         )
         self.pending_params = 0
         self.trial_count = 0
+        # Additional class we should run
+        self.components = []
+
+    def insert_component(self, obj):
+        self.components.append(obj)
+
+    def enable_checkpoints(self, name=None, **kwargs):
+        chk = CheckPointer(**kwargs)
+        chk.checkpoint_this(self, name=name)
+        self.insert_component(chk)
 
     @property
     def trials(self):
@@ -102,6 +113,9 @@ class HPOManager:
                     self._queue_suggest()
                     self.pending_params = 1
                     self.trial_count += 1
+
+                for comp in self.components:
+                    comp.run()
 
             self._shutdown()
         except Exception as e:
@@ -210,7 +224,7 @@ class HPODispatcher:
         self.configurator_config = configurator_config
         self.trial_count = 0
         self.seeds = numpy.random.RandomState(seed).randint(0, 100000, size=(max_trials, ))
-        self.observations = defaultdict(dict)
+        self.observations: Dict[str, Dict[str, int]] = defaultdict(dict)
         self.params = dict()
         self.buffered_observations = []
         self.finished = set()

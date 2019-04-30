@@ -1,8 +1,7 @@
 import inspect
 import numpy
+from collections import defaultdict
 from typing import Dict, Optional, Set
-from repro.hpo.dispatcher.trial import Trial
-from repro.hpo.dispatcher.dispatcher import HPODispatcher, HPOManager
 
 _resumable_aspect = {}
 
@@ -59,7 +58,9 @@ class ResumeManagerAspect(ResumableAspect):
     def state_attributes(self):
         return {'trial_count', 'running_trials', 'suspended_trials', 'finished_trials', 'dispatcher'}
 
-    def resume(self, obj: HPOManager, state: Dict[str, any]):
+    def resume(self, obj: 'HPOManager', state: Dict[str, any]):
+        from repro.hpo.dispatcher.trial import Trial
+
         def make_trial(trial_state, queue):
             t = Trial(trial_state['id'], obj.task, trial_state['params'], queue)
             t.latest_results = trial_state['latest_results']
@@ -82,8 +83,16 @@ class ResumeDispatcherAspect(ResumableAspect):
     def state_attributes(self):
         return {'trial_count', 'seeds', 'observations', 'buffered_observations', 'finished', 'params'}
 
-    def resume(self, obj: HPODispatcher, state: Dict[str, any]):
+    def resume(self, obj: 'HPODispatcher', state: Dict[str, any]):
         super(ResumeDispatcherAspect, self).resume(obj, state)
+        # self.observations: Dict[str, Dict[str, int]]
+        obs = obj.observations
+        obj.observations = defaultdict(dict)
+
+        for hex, steps in obs.items():
+            for k, objective in steps.items():
+                obj.observations[hex][int(k)] = objective
+
         obj.finished = set(obj.finished)
         return obj
 
@@ -103,12 +112,20 @@ class ResumeList(ResumableAspect):
         return [state(i) for i in obj]
 
 
-ResumableAspect.register(ResumeSet(), set)
-ResumableAspect.register(ResumeList(), list)
-ResumableAspect.register(ResumeNdArray(), numpy.ndarray)
-ResumableAspect.register(ResumeDispatcherAspect(), HPODispatcher)
-ResumableAspect.register(ResumeManagerAspect(), HPOManager)
-ResumableAspect.register(ResumeTrialAspect(), Trial)
+def _register():
+    if set not in _resumable_aspect:
+        from repro.hpo.dispatcher.trial import Trial
+        from repro.hpo.dispatcher.dispatcher import HPODispatcher, HPOManager
+
+        ResumableAspect.register(ResumeSet(), set)
+        ResumableAspect.register(ResumeList(), list)
+        ResumableAspect.register(ResumeNdArray(), numpy.ndarray)
+        ResumableAspect.register(ResumeDispatcherAspect(), HPODispatcher)
+        ResumableAspect.register(ResumeManagerAspect(), HPOManager)
+        ResumableAspect.register(ResumeTrialAspect(), Trial)
+
+
+_register()
 
 
 def state(obj: any) -> any:
@@ -132,3 +149,12 @@ def resume(obj: any, state: any) -> any:
 
     raise RuntimeError(f'Resumable aspect not implemented for {obj.__class__}')
 
+
+def is_resumeable(obj: any) -> bool:
+    classes = inspect.getmro(obj.__class__)
+
+    for cls in classes:
+        if cls in _resumable_aspect:
+            return True
+
+    return False
