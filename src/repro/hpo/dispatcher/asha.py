@@ -4,6 +4,8 @@ import logging
 import pprint
 import random
 
+from typing import Dict
+
 from repro.utils.flatten import flatten, unflatten
 from repro.hpo.dispatcher.dispatcher import HPODispatcher
 
@@ -38,10 +40,24 @@ class ASHA(HPODispatcher):
 
         super(ASHA, self)._observe(trial_id, params, step, objective, finished, **kwargs)
 
+    def make_suggest_parameters(self) -> Dict[str, any]:
+        kwargs = super(ASHA, self).make_suggest_parameters()
+
+        self.rungs[0].add(kwargs['trial_id'])
         self.update_rungs()
 
+        return kwargs
+
     def is_completed(self):
-        return len(self.rungs.get(self.base, [])) >= self.max_resource
+        completed = 0
+        for trial_id in self.rungs.get(self.base, []):
+            last_step, _ = self.get_objective(trial_id)
+            completed += int(last_step >= self.fidelities[-1])
+
+            if completed >= self.max_resource:
+                return True
+
+        return False
 
     def get_rung_id(self, trial_id):
         for rung_id, rung in sorted(self.rungs.items(), key=lambda item: item[0], reverse=True): 
@@ -58,9 +74,6 @@ class ASHA(HPODispatcher):
     def should_resume(self, trial_id):
         return not self.should_suspend(trial_id)
 
-    def is_completed(self):
-        return len(self.rungs.get(self.base, [])) >= self.max_resource
-
     def get_candidate(self, rung_id):
         rung = self.rungs.get(rung_id, set())
         next_rung = self.rungs.get(rung_id + 1, set())
@@ -75,6 +88,7 @@ class ASHA(HPODispatcher):
 
         completed_trials = list(sorted(completed_trials))
         i = 0
+        k = min(k, len(completed_trials))
         while i < k:
             objective, trial_id = completed_trials[i]
             if trial_id not in next_rung:
@@ -99,6 +113,11 @@ class ASHA(HPODispatcher):
             if candidate:
                 logger.info(f'{candidate} promoting to {rung_id + 1} {objective}')
                 self.rungs[rung_id + 1].add(candidate)
+                logger.info(
+                    'Current rungs: ' +
+                    ' '.join('{}:{}'.format(rung_id, len(rung))
+                             for rung_id, rung in self.rungs.items()))
+                return
 
 
 # asha = ASHA(rung, max_resource=256, min_resource=1, reduction_factor=4,

@@ -122,6 +122,7 @@ class HPOManager:
                 suspended_count = self.receive_and_suspend()
 
                 if self.dispatcher.is_completed():
+                    logging.info('HPO completed. Breaking out of run loop.')
                     break
 
                 # if so check if one needs to be resumed
@@ -144,6 +145,8 @@ class HPOManager:
         except Exception as e:
             self._shutdown(False)
             raise e
+
+        logger.info('HPO completed')
 
     def _shutdown(self, gracefully=True) -> None:
         # Close self.param_service
