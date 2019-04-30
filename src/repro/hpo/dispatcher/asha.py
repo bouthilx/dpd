@@ -5,6 +5,7 @@ import pprint
 import random
 
 from repro.utils.flatten import flatten, unflatten
+from repro.hpo.dispatcher.dispatcher import HPODispatcher
 
 
 logger = logging.getLogger(__name__)
@@ -16,59 +17,73 @@ logger = logging.getLogger(__name__)
 # mahler.find(tags, status=None)
 
 
-def build(space, fidelity_space, reduction_factor, max_resource):
-    return ASHA(space, fidelity_space, reduction_factor, max_resource)
+def build(space, configurator_config, fidelities, reduction_factor, max_resource, max_trials, seed):
+    return ASHA(space, configurator_config, fidelities, reduction_factor, max_resource, max_trials, seed)
 
 
-class ASHA(object):
-    def __init__(self, space, fidelity_space, reduction_factor, max_resource):
+class ASHA(HPODispatcher):
+    def __init__(self, space, configurator_config, fidelities, reduction_factor, max_resource, max_trials, seed):
+        super(ASHA, self).__init__(space, configurator_config, max_trials, seed)
 
-        self.space = space
-        self.fidelity_dim, self.fidelity_levels = next(iter(fidelity_space.items()))
-        self.rungs = defaultdict(list)
+        self.fidelities = fidelities
+        self.rungs = defaultdict(set)
         self.max_resource = max_resource
         self.reduction_factor = reduction_factor
-        self.base = len(self.fidelity_levels) - 1
+        self.base = len(self.fidelities) - 1
 
-    def get_bests(self, max_resource):
-        last_rung = self.rungs[len(self.fidelity_levels) - 1]
-        assert max_resource == len(last_rung), "{} != {}".format(max_resource, len(last_rung))
-        return last_rung
+    def _observe(self, trial_id, params, step, objective, finished=False, **kwargs):
+        if trial_id not in self.observations:
+            rung_id = 0
+            self.rungs[0].add(trial_id)
 
-    def reset(self):
-        self.rungs = defaultdict(list)
+        super(ASHA, self)._observe(trial_id, params, step, objective, finished, **kwargs)
 
-    def _fetch_rung_id(self, trial):
-        return self.fidelity_levels.index(trial['arguments'][self.fidelity_dim])
-
-    def observe(self, trials):
-        for trial in trials:
-            self.rungs[self._fetch_rung_id(trial)].append(trial)
+        self.update_rungs()
 
     def is_completed(self):
         return len(self.rungs.get(self.base, [])) >= self.max_resource
 
-    def _top_k(self, trials, k):
-        completed_trials = (trial for trial in trials
-                            if trial['registry']['status'] == 'Completed' and trial['output'])
-        # completed_trials = trials
+    def get_rung_id(self, trial_id):
+        for rung_id, rung in sorted(self.rungs.items(), key=lambda item: item[0], reverse=True): 
+            if trial_id in rung:
+                return rung_id
 
-        def key(trial):
-            try:
-                error_rate = trial['output']['best']['valid']['error_rate']
-            except KeyError:
-                pprint.pprint(trial)
-                raise
+        return None
 
-            return error_rate
+    def should_suspend(self, trial_id):
+        rung_id = self.get_rung_id(trial_id)
+        last_step = max(self.observations[trial_id].keys())
+        return self.fidelities[rung_id] <= last_step
 
-        return [trial for i, trial in enumerate(sorted(completed_trials, key=key)) if i < k]
+    def should_resume(self, trial_id):
+        return not self.should_suspend(trial_id)
 
-    def _fetch_trial_params(self, arguments):
-        flattened_arguments = flatten(arguments)
-        return unflatten(dict((key, flattened_arguments[key]) for key in self.space.keys()))
+    def is_completed(self):
+        return len(self.rungs.get(self.base, [])) >= self.max_resource
 
-    def get_params(self):
+    def get_candidate(self, rung_id):
+        rung = self.rungs.get(rung_id, set())
+        next_rung = self.rungs.get(rung_id + 1, set())
+        budget = self.fidelities[rung_id]
+        k = len(rung) // self.reduction_factor
+
+        completed_trials = []
+        for trial_id in rung:
+            last_step, objective = self.get_objective(trial_id)
+            if last_step and last_step >= budget:
+                completed_trials.append((objective, trial_id))
+
+        completed_trials = list(sorted(completed_trials))
+        i = 0
+        while i < k:
+            objective, trial_id = completed_trials[i]
+            if trial_id not in next_rung:
+                return trial_id, objective
+            i += 1
+
+        return None, None
+
+    def update_rungs(self):
         """
 
         Notes
@@ -78,29 +93,12 @@ class ASHA(object):
             Lookup for promotion in rung l + 1 contains trials of any status.
         """
         # NOTE: There should be base + 1 rungs
-        for k in range(self.base - 1, -1, -1):
-            rungs_k = self.rungs.get(k, [])
-            candidates = self._top_k(rungs_k, k=len(rungs_k) // self.reduction_factor)
+        for rung_id in range(self.base - 1, -1, -1):
+            candidate, objective = self.get_candidate(rung_id)
 
-            # Compare based on arguments
-            rungs_kp1 = [self._fetch_trial_params(trial['arguments'])
-                         for trial in self.rungs.get(k + 1, [])]
-            candidates = [candidate for candidate in candidates
-                          if self._fetch_trial_params(candidate['arguments']) not in rungs_kp1]
-
-            if candidates:
-                arguments = self._fetch_trial_params(candidates[0]['arguments'])
-                arguments[self.fidelity_dim] = self.fidelity_levels[k + 1]
-                logger.info(
-                    'Promoting to {}:\n{}'.format(
-                        k + 1, pprint.pformat(arguments)))
-                return arguments
-
-        randomseed = random.randint(0, 100000)
-        arguments = unflatten(dict(zip(self.space.keys(), self.space.sample(seed=randomseed)[0])))
-        arguments[self.fidelity_dim] = self.fidelity_levels[0]
-        logger.debug('Sampling:\n{}'.format(pprint.pformat(arguments)))
-        return arguments
+            if candidate:
+                logger.info(f'{candidate} promoting to {rung_id + 1} {objective}')
+                self.rungs[rung_id + 1].add(candidate)
 
 
 # asha = ASHA(rung, max_resource=256, min_resource=1, reduction_factor=4,

@@ -1,12 +1,8 @@
-from collections import defaultdict
 import argparse
-import copy
 import itertools
 import logging
-import math
 import os
 import pprint
-import re
 import json
 
 import yaml
@@ -26,6 +22,9 @@ from repro.utils.nesteddict import nesteddict
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_CONFIG_PATH = 'configs/hpop'
+
+
 def main(argv=None):
 
     # NOTE: When implementing full pipeline, config will become dynamic and change based on which
@@ -37,14 +36,15 @@ def main(argv=None):
         action='count', default=0,
         help="logging levels of information about the process (-v: INFO. -vv: DEBUG)")
 
-    subparsers = parser.add_subparsers(dest='command', title='subcommands', description='subcommands', help='')
+    subparsers = parser.add_subparsers(dest='command', title='subcommands',
+                                       description='subcommands')
     execute_subparser = subparsers.add_parser('execute')
     execute_subparsers = execute_subparser.add_subparsers(
         dest='benchmark', title='benchmark', description='benchmark', help='')
 
     execute_subparser.add_argument('--json-file', type=str, default=None)
     execute_subparsers = build_benchmark_subparsers(execute_subparsers)
-    
+
     for subparser in execute_subparsers:
         subparser.add_argument(
             '--backend', type=str, default='builtin', choices=['builtin', 'mahler'],
@@ -75,7 +75,7 @@ def main(argv=None):
 
     for subparser in execute_subparsers:
         subparser.add_argument(
-            '--config-dir-path', required=True,
+            '--config-dir-path', type=str, default=DEFAULT_CONFIG_PATH,
             help='Directory with the configuration of the HPO algorithms.')
 
     for execute_subparser in execute_subparsers:
@@ -112,9 +112,11 @@ def main(argv=None):
         raise ValueError('Invalid command: {}'.format(options.command))
 
 
-def load_config(config_dir_path, benchmark, hpo_role, name):
-    config_path = os.path.join(config_dir_path, "{benchmark}/{role}/{name}.yaml").format(
-        benchmark=benchmark, role=hpo_role, name=name)
+def load_config(config_dir_path, benchmark, task, hpo_role, name):
+    config_path = os.path.join(config_dir_path, "{benchmark}/{task}/{role}/{name}.yaml").format(
+        benchmark=benchmark, task=task, role=hpo_role, name=name)
+
+    print(config_path)
 
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
@@ -128,20 +130,20 @@ def load_config(config_dir_path, benchmark, hpo_role, name):
     return config
 
 
-
 def execute(benchmark, options):
     print(f'Benchmark: {benchmark.name}')
 
     optim_data = nesteddict()
-    problem_configurations = itertools.product(benchmark.problems, options.dispatchers,
-                                               options.configurators, options.seeds, options.workers)
+    problem_configurations = itertools.product(
+        benchmark.problems, options.dispatchers,
+        options.configurators, options.seeds, options.workers)
 
     for problem, dispatcher, configurator, seed, workers in problem_configurations:
         print(f'{dispatcher} - {configurator} - workers:{workers} - seed:{seed} - problem:{problem.tags}')
 
-        dispatcher_config = load_config(options.config_dir_path, benchmark.name, 'dispatcher',
+        dispatcher_config = load_config(options.config_dir_path, benchmark.name, 'hpo', 'dispatcher',
                                         dispatcher)
-        configurator_config = load_config(options.config_dir_path, benchmark.name, 'configurator',
+        configurator_config = load_config(options.config_dir_path, benchmark.name, 'hpo', 'configurator',
                                           configurator)
 
         for config in [dispatcher_config, configurator_config]:
@@ -168,8 +170,7 @@ def execute(benchmark, options):
 
 def process_trials(trials):
     results = []
-    # TODO: Sort by creation time
-    for trial in trials:
+    for trial in sorted(trials, key=lambda trial: trial.creation_time):
         results.append({'params': trial.params, 'objective': trial.get_last_results()[-1]['objective']})
 
     return results
