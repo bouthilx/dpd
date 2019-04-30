@@ -37,6 +37,7 @@ class MockDispatcher(HPODispatcher):
         super(MockDispatcher, self).observe(trial, result)
 
     def is_completed(self):
+        # print(len(self.finished), self.max_trials)
         return len(self.finished) >= self.max_trials
 
     def should_suspend(self, trial):
@@ -106,6 +107,7 @@ def run_mock_suspend_resume():
 
     def resume_and_finish(manager_state):
         max_tasks = max_tasks_real
+
         dispatcher = MockDispatcher(max_tasks)
         manager = HPOManager(dispatcher, mock_task, max_trials=max_tasks, workers=5)
 

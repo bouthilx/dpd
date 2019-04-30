@@ -7,11 +7,8 @@ from collections import defaultdict
 from typing import Callable, Dict, Tuple
 from queue import Empty as EmptyQueueException
 
-
 from repro.hpo.dispatcher.trial import Trial
 from repro.hpo.configurator.base import build_configurator
-from repro.utils.resumable import resume
-
 
 from multiprocessing import Queue, Manager, Process
 
@@ -50,16 +47,6 @@ class HPOManager:
     """ Manage a series of task - trials, it can create, suspend and resume those trials
         in function of the results it is receiving/observing through time
      """
-
-    # Attributes to save to make a resumable object
-    __state_attributes__ = {
-        'trial_count',
-        'running_trials',
-        'suspended_trials',
-        'finished_trials',
-        'dispatcher'
-    }
-
     def __init__(self, dispatcher, task: Callable, max_trials: int, workers: int):
         """
         :param task: Task that uses the HPO parameters and return results
@@ -83,24 +70,6 @@ class HPOManager:
         )
         self.pending_params = 0
         self.trial_count = 0
-
-    def resume(self, state: Dict[str, any]):
-        def make_trial(trial_state, queue):
-            t = Trial(trial_state['id'], self.task, trial_state['params'], queue)
-            t.latest_results = trial_state['latest_results']
-            return t
-
-        self.dispatcher = resume(self.dispatcher, state['dispatcher'])
-        self.trial_count = state['trial_count']
-
-        self.running_trials = {make_trial(t, self.manager.Queue()) for t in state['running_trials']}
-        self.suspended_trials = {make_trial(t, self.manager.Queue()) for t in state['suspended_trials']}
-        self.finished_trials = {make_trial(t, None) for t in state['finished_trials']}
-
-        for trial in self.running_trials:
-            trial.start()
-
-        return self
 
     @property
     def trials(self):
@@ -235,18 +204,7 @@ class HPOManager:
         return len(to_be_resumed)
 
 
-# hpo = HPODispatcher.from_dict(....)
-
 class HPODispatcher:
-    __state_attributes__ = {
-        'trial_count',
-        'seeds',
-        'observations',
-        'buffered_observations',
-        'finished',
-        'params'
-    }
-
     def __init__(self, space: 'Space', configurator_config: Dict[str, any], max_trials: int, seed=1):
         self.space = space
         self.configurator_config = configurator_config
@@ -257,11 +215,6 @@ class HPODispatcher:
         self.buffered_observations = []
         self.finished = set()
         self.max_trials = max_trials
-
-    def resume(self, state: Dict[str, any]):
-        resume(self, state, default=True)
-        self.finished = set(self.finished)
-        return self
 
     def should_resume(self, trial) -> bool:
         return not trial.has_finished()
