@@ -26,12 +26,6 @@ class Trial:
     """ A trial represent an experience in progress, it holds all the necessary information to stop it if it is
         in progress or resume it if it was suspended """
 
-    __state_attributes__ = {
-        'id',
-        'params',
-        'latest_results'
-    }
-
     def __init__(self, id: str, task: Callable[[Dict[str, any]], None], params: Dict[str, any], queue: Queue):
         self.id = id
         self.task = task

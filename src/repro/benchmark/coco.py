@@ -162,8 +162,8 @@ def build_space(problem, **space_config):
     return space
 
 
-if mahler is not None:
-    hpo_coco = mahler.operator(resources={'cpu': 2, 'mem': '20MB'}, resumable=False)(hpo_coco)
+#if mahler is not None:
+#    hpo_coco = mahler.operator(resources={'cpu': 2, 'mem': '20MB'}, resumable=False)(hpo_coco)
 
 
 if cocoex is not None:
