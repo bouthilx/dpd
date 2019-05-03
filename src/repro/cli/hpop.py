@@ -105,7 +105,7 @@ def main(argv=None):
     benchmark = build_benchmark(name=options.benchmark, **vars(options))
 
     if options.command == 'execute':
-        execute(benchmark, options)
+        return execute(benchmark, options)
     elif options.command == 'visualize':
         visualize(benchmark, options)
     else:
