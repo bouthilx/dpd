@@ -81,7 +81,6 @@ def main(argv=None):
         subparser.add_argument(
             '--seeds', type=int, nargs='*', default=[1])
 
-
         # subparser.add_argument(
         #     '--seed', type=int, default=1,
         #     help='Seed for the benchmark.')
@@ -159,7 +158,8 @@ def execute(benchmark, options):
         options.configurators, options.seeds, options.workers)
 
     for problem, dispatcher, configurator, seed, workers in problem_configurations:
-        logger.info(f'{dispatcher} - {configurator} - workers:{workers} - seed:{seed} - problem:{problem.tags}')
+        logger.info(f'{dispatcher} - {configurator} - workers:{workers} - seed:{seed} - '
+                    f'problem:{problem.tags}')
 
         dispatcher_config = load_config(options.config_dir_path, benchmark.name, 'hpo',
                                         'dispatcher', dispatcher)
@@ -176,7 +176,8 @@ def execute(benchmark, options):
 
         trials, observations = execute_problem(
             dispatcher_config, problem, options.max_trials,
-            workers, options, tags)
+            workers, options.backend, options.container, tags, options.checkpoint,
+            not options.no_resume)
 
         results = process_trials(trials)
 
@@ -192,11 +193,6 @@ def execute(benchmark, options):
         json_file.close()
     else:
         pprint.pprint(optim_data)
-
-
-def create_tags(version, dispatcher, configurator, seed, workers, problem):
-    env_tags = (f'd-{dispatcher} c-{configurator} s-{seed} w-{workers}').split(' ')
-    return [version] + env_tags + problem.tags
 
 
 def process_trials(trials):
@@ -220,27 +216,27 @@ def checkpoint_key(tags):
     return sh.hexdigest()[:15]
 
 
-def execute_problem(dispatcher_config, problem, max_trials, workers, options, tags):
+def init_checkpoint(backend, manager, checkpoint_dir, resume, tags):
+    if backend == 'builtin':
+        init_builtin_checkpoint(manager, checkpoint_dir, resume, tags)
+    else:
+        raise NotImplementedError
 
-    backend_config = dict(tags=tags, container=options.container)
 
-    dispatcher = build_dispatcher(problem.space, **dispatcher_config)
+def init_builtin_checkpoint(manager, checkpoint_dir, resume, tags):
 
-    resource_manager = build_resource_manager(options.backend, workers=workers, operator=problem.run, **backend_config)
-    trial_factory = functools.partial(build_trial, name=options.backend, **backend_config)
-
-    manager = HPOManager(resource_manager, dispatcher, problem.run, trial_factory,
-                         max_trials=max_trials, workers=workers)
+    if not checkpoint_dir:
+        return
 
     problem_hex = checkpoint_key(tags)
-    chk_file = f'{options.checkpoint}/{problem_hex}'
+    chk_file = os.path.join(checkpoint_dir, problem_hex)
 
     logger.info(f'Looking for previous checkpoint at {chk_file}: ...')
 
     if os.path.exists(chk_file):
         logger.info('Checkpoint was found')
 
-        if not options.no_resume:
+        if resume:
             logger.info('Resuming ...')
             manager = resume_from_checkpoint(manager, chk_file)
         else:
@@ -248,19 +244,33 @@ def execute_problem(dispatcher_config, problem, max_trials, workers, options, ta
     else:
         logger.info('No Checkpoint!')
 
-    if options.checkpoint:
-        path = options.checkpoint
+    if checkpoint_dir:
         file_name = chk_file
-        if path == '':
-            path = '.'
 
         logger.info(f'Enabling checkpoints in {file_name}')
 
         manager.enable_checkpoints(
             name=problem_hex,
             every=None,
-            archive_folder=path
+            archive_folder=checkpoint_dir
         )
+
+
+def execute_problem(dispatcher_config, problem, max_trials, workers, backend, container, tags,
+                    checkpoint, resume):
+
+    backend_config = dict(tags=tags, container=container)
+
+    dispatcher = build_dispatcher(problem.space, **dispatcher_config)
+
+    resource_manager = build_resource_manager(backend, workers=workers, operator=problem.run,
+                                              **backend_config)
+    trial_factory = functools.partial(build_trial, name=backend, **backend_config)
+
+    manager = HPOManager(resource_manager, dispatcher, problem.run, trial_factory,
+                         max_trials=max_trials, workers=workers)
+
+    init_checkpoint(backend, manager, checkpoint, resume, tags)
 
     manager.run()
     resource_manager.terminate()
