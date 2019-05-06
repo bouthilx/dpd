@@ -1,8 +1,15 @@
 from collections import namedtuple
 from typing import Iterable
+import pickle
 import time
 
 import numpy
+
+
+try:
+    import mahler.client as mahler
+except ImportError:
+    mahler = None
 
 from orion.core.io.space_builder import Space, DimensionBuilder
 
@@ -37,7 +44,7 @@ def build_space():
 
 
 def create_tags():
-    return ['curves']
+    return ['b-curves']
 
 
 def forget_curve(t, a=1.84, b=1.25, c=1.84):
@@ -51,11 +58,24 @@ def gated(t, a, b):
 
 def curve_run(a, b, callback):
 
+    if callback and not hasattr(callback, '__call__'):
+        callback = pickle.loads(callback)
+
+    objectives = []
+
     for t in range(1, T + 1):
         y = gated(t, a, b)
-        time.sleep(0.1)
+        time.sleep(0.01)
         if callback:
             callback(step=t, objective=y, finished=(t) >= T)
+        objectives.append({'epoch': t, 'objective': y})
+
+    return {'all': objectives}
+
+
+if mahler:
+    resources = {'cpu': 1, 'mem': '10MB', 'usage': {'cpu': {'util': 0, 'memory': 10 * 2 ** 20}}}
+    curve_run = mahler.operator(resources=resources)(curve_run)
 
 
 def build(**kwargs):
