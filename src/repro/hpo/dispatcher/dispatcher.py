@@ -54,7 +54,6 @@ class HPODispatcher:
         self._observe(trial_id=kwargs['trial_id'], params=None, step=-1, objective=worst_objectives)
 
         self.trial_count += 1
-
         return kwargs
 
     def receive_and_suggest(self, trial_id, buffered_observations, seed) -> Tuple[str, Dict[str, any]]:
@@ -67,7 +66,6 @@ class HPODispatcher:
         return trial_id, params
 
     def suggest(self, seed) -> Dict[str, any]:
-        self.trial_count += 1
         return self.build_configurator().get_params(seed=seed)
 
     def build_configurator(self):

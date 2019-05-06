@@ -113,6 +113,8 @@ def main(argv=None):
     if options.backend == 'mahler':
         assert options.container is not None
         assert options.version is not None
+    else:
+        options.version = '42'
 
     levels = {0: logging.WARNING,
               1: logging.INFO,
@@ -182,7 +184,7 @@ def execute(benchmark, options):
 
         optim_data[','.join(problem.tags)][dispatcher][configurator][seed][workers] = results
 
-        plot(trials, observations)
+        # plot(trials, observations)
 
     if options.save_out is not None:
         data = json.dumps(optim_data, indent=4)
@@ -192,11 +194,6 @@ def execute(benchmark, options):
         json_file.close()
     else:
         pprint.pprint(optim_data)
-
-
-def create_tags(version, dispatcher, configurator, seed, workers, problem):
-    env_tags = (f'd-{dispatcher} c-{configurator} s-{seed} w-{workers}').split(' ')
-    return [version] + env_tags + problem.tags
 
 
 def process_trials(trials):
@@ -217,6 +214,7 @@ def checkpoint_key(tags):
     sh = hashlib.sha256()
     for tag in tags:
         sh.update(tag.encode('utf-8'))
+
     return sh.hexdigest()[:15]
 
 

@@ -108,7 +108,7 @@ class HPOManager:
                 any_change = any_change or stop_count > 0
 
                 if self.dispatcher.is_completed():
-                    logging.info('HPO completed. Breaking out of run loop.')
+                    logging.debug('HPO completed. Breaking out of run loop.')
                     break
 
                 # if so check if one needs to be resumed
@@ -133,18 +133,18 @@ class HPOManager:
                     comp.run()
 
                 if any_change:
-                    logger.info(f'{bcolors.OKGREEN}running{bcolors.ENDC}:{len(self.running_trials)} '
+                    logger.debug(f'{bcolors.OKGREEN}running{bcolors.ENDC}:{len(self.running_trials)} '
                                 f'{bcolors.WARNING}suspended{bcolors.ENDC}:{len(self.suspended_trials)} '
                                 f'{bcolors.OKBLUE}completed{bcolors.ENDC}:{len(self.finished_trials)}')
 
-            logger.info('Waiting for running trials to complete.')
+            logger.debug('Waiting for running trials to complete.')
             # TODO: Shouldn't we suspend them?
             self._shutdown()
         except Exception as e:
             self._shutdown(False)
             raise e
 
-        logger.info('HPO completed')
+        logger.debug('HPO completed')
 
     def _shutdown(self, gracefully=True) -> None:
         # Close self.param_service
@@ -153,7 +153,7 @@ class HPOManager:
         if gracefully:
             while self.running_trials:
                 if self.receive_and_suspend():
-                    logger.info(f'{bcolors.OKGREEN}running{bcolors.ENDC}:{len(self.running_trials)} '
+                    logger.debug(f'{bcolors.OKGREEN}running{bcolors.ENDC}:{len(self.running_trials)} '
                                 f'{bcolors.WARNING}suspended{bcolors.ENDC}:{len(self.suspended_trials)} '
                                 f'{bcolors.OKBLUE}completed{bcolors.ENDC}:{len(self.finished_trials)}')
 
@@ -182,7 +182,7 @@ class HPOManager:
                 trial = self.trial_factory(id=trial_id, task=self.task, params=params,
                                            queue=self.manager.Queue())
                 trial.start()
-                logger.info(f'{trial.id} {bcolors.OKGREEN}started{bcolors.ENDC}')
+                logger.debug(f'{trial.id} {bcolors.OKGREEN}started{bcolors.ENDC}')
                 self.running_trials.add(trial)
 
             except Empty:
@@ -205,17 +205,17 @@ class HPOManager:
                 self.dispatcher.observe(trial, result)
 
             if trial.is_alive() and trial not in self.to_be_suspended_trials and self.dispatcher.should_suspend(trial.id):
-                logger.info(f'{trial.id} {bcolors.WARNING}suspending{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
+                logger.debug(f'{trial.id} {bcolors.WARNING}suspending{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
                 trial.stop()
                 to_be_suspended.add(trial)
 
             elif trial.has_finished():
-                logger.info(f'{trial.id} {bcolors.OKBLUE}completed{bcolors.ENDC}{trial.get_last_results()[-1]["objective"]}')
+                logger.debug(f'{trial.id} {bcolors.OKBLUE}completed{bcolors.ENDC}{trial.get_last_results()[-1]["objective"]}')
                 is_finished.add(trial)
 
             # Trial was lost
             elif not trial.is_alive() and trial not in self.to_be_suspended_trials:
-                logger.info(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
+                logger.debug(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
                 to_be_suspended.add(trial)
 
         for trial in is_finished:
@@ -229,7 +229,7 @@ class HPOManager:
         #       to suspend properly
         for trial in (to_be_suspended | self.to_be_suspended_trials):
             if not trial.is_alive():
-                logger.info(f'{trial.id} {bcolors.WARNING}suspended{bcolors.ENDC}')
+                logger.debug(f'{trial.id} {bcolors.WARNING}suspended{bcolors.ENDC}')
                 self.suspended_trials.add(trial)
                 self.to_be_suspended_trials.discard(trial)
                 self.running_trials.discard(trial)
@@ -259,7 +259,7 @@ class HPOManager:
         for trial in to_be_resumed:
             self.suspended_trials.discard(trial)
             trial.start()
-            logger.info(f'{trial.id} {bcolors.OKGREEN}resumed{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
+            logger.debug(f'{trial.id} {bcolors.OKGREEN}resumed{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
             self.running_trials.add(trial)
 
         for trial in is_finished:

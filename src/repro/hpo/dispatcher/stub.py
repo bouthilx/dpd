@@ -11,6 +11,7 @@ class Stub(HPODispatcher):
         return True
 
     def is_completed(self):
+        print('\r', len(self.finished), self.max_trials, len(self.finished) >= self.max_trials, end='')
         return len(self.finished) >= self.max_trials
 
     

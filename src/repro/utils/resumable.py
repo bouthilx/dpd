@@ -1,4 +1,5 @@
 import inspect
+import copy
 import numpy
 from collections import defaultdict
 from typing import Dict, Optional, Set
@@ -57,8 +58,8 @@ class ResumeTrialAspect(ResumableAspect):
 
 class ResumeManagerAspect(ResumableAspect):
     def state_attributes(self):
-        return {'trial_count', 'running_trials', 'suspended_trials', 'finished_trials',
-                'dispatcher'}
+        return {'running_trials', 'suspended_trials', 'finished_trials',
+                'dispatcher', 'pending_params'}
 
     def resume(self, obj: 'HPOManager', state: Dict[str, any]):
         from repro.hpo.trial.builtin import Trial
@@ -70,7 +71,6 @@ class ResumeManagerAspect(ResumableAspect):
             return t
 
         obj.dispatcher = resume(obj.dispatcher, state['dispatcher'])
-        obj.trial_count = state['trial_count']
 
         obj.running_trials = {make_trial(t, obj.manager.Queue()) for t in state['running_trials']}
         obj.suspended_trials = {make_trial(t, obj.manager.Queue())
@@ -79,14 +79,17 @@ class ResumeManagerAspect(ResumableAspect):
 
         for trial in obj.running_trials:
             trial.start()
+            obj.running_trials.add(trial)
 
+        # Compute the trial_count remaining
+        obj.trial_count = max(len(obj.finished_trials) + len(obj.suspended_trials) + len(obj.running_trials) - 1, 0)
+        obj.dispatcher.trial_count = obj.trial_count
         return obj
 
 
 class ResumeDispatcherAspect(ResumableAspect):
     def state_attributes(self):
-        return {'trial_count', 'seeds', 'observations', 'buffered_observations', 'finished',
-                'params'}
+        return {'seeds', 'observations', 'buffered_observations', 'finished', 'params'}
 
     def resume(self, obj: 'HPODispatcher', state: Dict[str, any]):
         super(ResumeDispatcherAspect, self).resume(obj, state)
