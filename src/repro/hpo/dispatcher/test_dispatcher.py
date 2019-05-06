@@ -1,8 +1,6 @@
 import time
-import json
 
 from repro.utils.chrono import Chrono
-from repro.utils.resumable import resume
 from repro.hpo.dispatcher.dispatcher import HPOManager, HPODispatcher
 from repro.utils.checkpoint import resume_from_checkpoint
 

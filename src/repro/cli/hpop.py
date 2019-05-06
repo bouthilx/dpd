@@ -15,9 +15,10 @@ except ImportError:
 from repro.benchmark.base import build_benchmark, build_benchmark_subparsers
 import repro.hpo.configurator.base
 import repro.hpo.dispatcher.base
+
 from repro.hpo.dispatcher.dispatcher import HPOManager
 from repro.utils.nesteddict import nesteddict
-
+from repro.utils.checkpoint import resume_from_checkpoint
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,8 @@ def main(argv=None):
         dest='benchmark', title='benchmark', description='benchmark', help='')
 
     execute_subparser.add_argument('--json-file', type=str, default=None)
+    execute_subparser.add_argument('--checkpoint', action='store_true', help='enable checkpointing')
+    execute_subparser.add_argument('--no-resume', action='store_false', help='do not resume the checkpoint')
     execute_subparsers = build_benchmark_subparsers(execute_subparsers)
 
     for subparser in execute_subparsers:
@@ -69,6 +72,8 @@ def main(argv=None):
             '--max-trials', type=int, default=100)
         subparser.add_argument(
             '--seeds', type=int, nargs='*', default=[1])
+
+
         # subparser.add_argument(
         #     '--seed', type=int, default=1,
         #     help='Seed for the benchmark.')
@@ -152,7 +157,7 @@ def execute(benchmark, options):
 
         dispatcher_config['configurator_config'] = configurator_config
 
-        trials = execute_problem(dispatcher_config, problem, options.max_trials, workers)
+        trials = execute_problem(dispatcher_config, problem, options.max_trials, workers, options)
 
         results = process_trials(trials)
 
@@ -176,11 +181,34 @@ def process_trials(trials):
     return results
 
 
-def execute_problem(dispatcher_config, problem, max_trials, workers):
+def execute_problem(dispatcher_config, problem, max_trials, workers, opt):
 
     dispatcher = repro.hpo.dispatcher.base.build_dispatcher(problem.space, **dispatcher_config)
 
     manager = HPOManager(dispatcher, problem.run, max_trials=max_trials, workers=workers)
+
+    if os.path.exists(opt.json_file):
+        if not opt.no_resume:
+            logger.info('Found checkpoint file! Resuming ...')
+            manager = resume_from_checkpoint(manager, opt.json_file)
+        else:
+            logger.info('Ignoring Checkpoint file.. It will be overridden!')
+
+    if opt.checkpoint:
+        path = opt.json_file.split('/')
+        file_name = path[-1]
+        path = '/'.join(path[:-1])
+        if path == '':
+            path = '.'
+
+        logger.info(f'Enabling checkpoints in {path} at {file_name}')
+
+        manager.enable_checkpoints(
+            name=file_name,
+            every=None,
+            archive_folder=path
+        )
+
     manager.run()
 
     return manager.trials

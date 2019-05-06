@@ -2,17 +2,9 @@ from collections import namedtuple
 import functools
 import itertools
 import logging
-import random
-import copy
-import numpy
 
-from typing import List, Tuple, Dict, Optional, Iterable
-from dataclasses import dataclass, field
-
+from typing import Iterable
 from orion.core.io.space_builder import Space, DimensionBuilder
-
-from repro.utils.distributed import LazyInstantiator, make_pool
-from repro.utils.chrono import Chrono
 
 try:
     import cocoex
@@ -34,7 +26,7 @@ if cocoex:
 
 class COCOBenchmark:
     name = 'coco'
-    attributes =  ['problem_ids', 'dimensions', 'instances']
+    attributes = ['problem_ids', 'dimensions', 'instances']
 
     def __init__(self, problem_ids=None, instances=None, dimensions=None):
         self.problem_ids = problem_ids if problem_ids else list(range(1, 25))
@@ -93,24 +85,6 @@ class COCOBenchmark:
             benchmark_config['space'] = build_space(problem)
 
             yield ProblemType(**benchmark_config)
-
-
-def build_space(problem):
-    space = Space()
-    for dim in range(problem.dimension):
-        name = get_dim_name(dim)
-
-        if space_config.get(name, {}) is None:
-            continue
-
-        config = dict(
-            prior='uniform', lower_bound=problem.lower_bounds[dim],
-            upper_bound=problem.upper_bounds[dim])
-
-        space[name] = DimensionBuilder().build(
-            name, '{prior}({lower_bound}, {upper_bound})'.format(**config))
-
-    return space
 
 
 def coco_run(problem_config, callback=None, **params):
