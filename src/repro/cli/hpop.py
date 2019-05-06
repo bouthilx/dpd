@@ -176,7 +176,7 @@ def execute(benchmark, options):
 
         trials, observations = execute_problem(
             dispatcher_config, problem, options.max_trials,
-            workers, options.backend, dict(tags=tags, container=options.container))
+            workers, options, tags)
 
         results = process_trials(trials)
 
@@ -220,7 +220,9 @@ def checkpoint_key(tags):
     return sh.hexdigest()[:15]
 
 
-def execute_problem(dispatcher_config, problem, max_trials, workers, options, tags, backend_config):
+def execute_problem(dispatcher_config, problem, max_trials, workers, options, tags):
+
+    backend_config = dict(tags=tags, container=options.container)
 
     dispatcher = build_dispatcher(problem.space, **dispatcher_config)
 
@@ -231,14 +233,14 @@ def execute_problem(dispatcher_config, problem, max_trials, workers, options, ta
                          max_trials=max_trials, workers=workers)
 
     problem_hex = checkpoint_key(tags)
-    chk_file = f'{opt.checkpoint}/{problem_hex}'
+    chk_file = f'{options.checkpoint}/{problem_hex}'
 
     logger.info(f'Looking for previous checkpoint at {chk_file}: ...')
 
     if os.path.exists(chk_file):
         logger.info('Checkpoint was found')
 
-        if not opt.no_resume:
+        if not options.no_resume:
             logger.info('Resuming ...')
             manager = resume_from_checkpoint(manager, chk_file)
         else:
@@ -246,8 +248,8 @@ def execute_problem(dispatcher_config, problem, max_trials, workers, options, ta
     else:
         logger.info('No Checkpoint!')
 
-    if opt.checkpoint:
-        path = opt.checkpoint
+    if options.checkpoint:
+        path = options.checkpoint
         file_name = chk_file
         if path == '':
             path = '.'
