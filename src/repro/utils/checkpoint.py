@@ -27,7 +27,7 @@ class CheckPointer(MonitorComponent):
     def _save_obj(self, name, obj):
         from repro.utils.resumable import state
 
-        file_name = f'{self.archive_folder}/{name}.json'
+        file_name = f'{self.archive_folder}/{name}'
         with open(file_name, 'w') as f:
             json.dump(state(obj), f, indent=2)
 
@@ -40,10 +40,12 @@ class CheckPointer(MonitorComponent):
         self.last_save = time.time()
 
     def run(self):
-        sleep_time = self.every - (time.time() - self.last_save)
-
-        if sleep_time < 0:
+        if self.every is None:
             self.save_now()
+        else:
+            sleep_time = self.every - (time.time() - self.last_save)
+            if sleep_time < 0:
+                self.save_now()
 
 
 def load_checkpoint(name):
