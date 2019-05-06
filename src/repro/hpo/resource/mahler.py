@@ -3,6 +3,7 @@ import logging
 import os
 import pprint
 import time
+import uuid
 from multiprocessing import Process
 
 try:
@@ -40,6 +41,7 @@ class MahlerResourceManager(ResourceManager):
 
     def __init__(self, workers, resources, container, tags, workers_per_job=10, monitoring_interval=300):
         super(MahlerResourceManager, self).__init__(workers, resources)
+        self.id = uuid.uuid4().hex
         self.container = container
         self.tags = tags
         self.workers_per_job = workers_per_job
@@ -56,11 +58,14 @@ class MahlerResourceManager(ResourceManager):
 
         self.user = getpass.getuser()
 
+        # TODO: Support cpu job only. Force gpu resource until then.
+        self.resources['gpu'] = 1
+
     def start(self):
         print(f'mahler -v execute --tags {" ".join(self.tags)} --num-workers {self.workers}')
 
         for host_name, host in self.hosts.items():
-            scheduler = Scheduler(self.user, host_name, self.workers, self.workers_per_job,
+            scheduler = Scheduler(self.id, self.user, host_name, self.workers, self.workers_per_job,
                                   self.resources,
                                   host['max_workers'],
                                   host['prolog'], host['submission_root'],
@@ -81,9 +86,10 @@ class MahlerResourceManager(ResourceManager):
 
 
 class Scheduler(Process):
-    def __init__(self, user, host, workers, workers_per_job, resources, max_workers, prolog,
+    def __init__(self, id, user, host, workers, workers_per_job, resources, max_workers, prolog,
                  submission_root, container, monitoring_interval=300):
         super(Scheduler, self).__init__()
+        self.id = id
         self.user = user
         self.host = host
         self.workers = workers
@@ -137,10 +143,10 @@ class Scheduler(Process):
 
             states[line] += 1
 
-            if name == self.name and state not in workers:
+            if name == self.id and state not in workers:
                 workers[state] = 0
 
-            if name == self.name:
+            if name == self.id:
                 workers[state] += 1
 
         return workers, states
@@ -180,7 +186,7 @@ class Scheduler(Process):
 
         array_option = 'array=1-{};'.format(n_workers)
         flow_options = FLOW_OPTIONS_TEMPLATE.format(
-            array=array_option, job_name=self.name)
+            array=array_option, job_name=self.id)
 
         resources = []
         for name, value in self.resources.items():
@@ -218,15 +224,22 @@ class Scheduler(Process):
         submit_command = SUBMIT_COMMANDLINE_TEMPLATE.format(flow=flow_command, command=command)
 
         logger.info(f"{self.user}@{self.host} Executing '{submit_command}'")
-        # out = self.connection.run(submit_command, hide=True, warn=True)
-        # logger.info("Command output:")
-        # logger.info(out.stdout)
-        # logger.info(out.stderr)
+        out = self.connection.run(submit_command, hide=True, warn=True)
+        logger.info("Command output:")
+        logger.info(out.stdout)
+        logger.info(out.stderr)
 
 
 if mahler:
-    def build(workers, resources={}, container=None, tags=tuple()):
-        return MahlerResourceManager(workers, resources, container=container, tags=tags)
+    def build(workers, operator=None, resources={}, container=None, tags=tuple()):
+        full_resource_spec = {}
+
+        if operator is not None:
+            full_resource_spec.update(operator.resources)
+
+        full_resource_spec.update(resources)
+
+        return MahlerResourceManager(workers, full_resource_spec, container=container, tags=tags)
 
 
 if __name__ == '__main__':

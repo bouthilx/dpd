@@ -85,8 +85,6 @@ def main(argv=None):
         # subparser.add_argument(
         #     '--seed', type=int, default=1,
         #     help='Seed for the benchmark.')
-        subparser.add_argument(
-            '--version', type=str, required=True)
 
     for subparser in execute_subparsers:
         subparser.add_argument(
@@ -97,9 +95,10 @@ def main(argv=None):
         continue
 
     # TODO: Add these arguments only for Mahler backend
-    # for register_subparser in register_subparsers:
-    #     register_subparser.add_argument('--version', type=str, required=True)
-    #     register_subparser.add_argument('--container', type=str, required=True)
+    if 'mahler' in list(repro.hpo.trial.base.factories.keys()):
+        for register_subparser in execute_subparsers:
+            register_subparser.add_argument('--version', type=str)
+            register_subparser.add_argument('--container', type=str)
     #     register_subparser.add_argument(
     #         '--force', action='store_true', default=False,
     #         help='Register even if another similar task already exists')
@@ -110,6 +109,10 @@ def main(argv=None):
             default='f{id:03d}-d{dimension:03d}.png')
 
     options = parser.parse_args(argv)
+
+    if options.backend == 'mahler':
+        assert options.container is not None
+        assert options.version is not None
 
     levels = {0: logging.WARNING,
               1: logging.INFO,
@@ -173,7 +176,7 @@ def execute(benchmark, options):
 
         trials, observations = execute_problem(
             dispatcher_config, problem, options.max_trials,
-            workers, options.backend, dict(tags=tags))
+            workers, options.backend, dict(tags=tags, container=options.container))
 
         results = process_trials(trials)
 
@@ -221,7 +224,7 @@ def execute_problem(dispatcher_config, problem, max_trials, workers, options, ta
 
     dispatcher = build_dispatcher(problem.space, **dispatcher_config)
 
-    resource_manager = build_resource_manager(options.backend, workers=workers, **backend_config)
+    resource_manager = build_resource_manager(options.backend, workers=workers, operator=problem.run, **backend_config)
     trial_factory = functools.partial(build_trial, name=options.backend, **backend_config)
 
     manager = HPOManager(resource_manager, dispatcher, problem.run, trial_factory,

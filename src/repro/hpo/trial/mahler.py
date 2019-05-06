@@ -51,7 +51,7 @@ class MahlerProcess(Process):
         # Container, tags, resource, etc.
         self.operator_kwargs = copy.deepcopy(operator_kwargs)
         self.operator_kwargs.setdefault('tags', [])
-        self.operator_kwargs['tags'] = operator_kwargs['tags'] + [trial_id]
+        self.operator_kwargs['tags'] = operator_kwargs['tags'] + [trial_id] + ['worker']
         self.task = None
         self.mahler_client = None
         signal.signal(signal.SIGTERM, self.suspend)
