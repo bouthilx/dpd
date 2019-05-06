@@ -54,7 +54,7 @@ class HPOManager:
     """ Manage a series of task - trials, it can create, suspend and resume those trials
         in function of the results it is receiving/observing through time
      """
-    def __init__(self, dispatcher, task: Callable, max_trials: int, workers: int):
+    def __init__(self, dispatcher, task: Callable, max_trials: int, workers: int, checkpoints=True):
         """
         :param task: Task that uses the HPO parameters and return results
         """
@@ -79,6 +79,8 @@ class HPOManager:
         self.trial_count = 0
         # Additional class we should run
         self.components = []
+        if checkpoints:
+            self.enable_checkpoints()
 
     def insert_component(self, obj):
         self.components.append(obj)

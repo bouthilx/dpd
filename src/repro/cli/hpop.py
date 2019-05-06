@@ -43,9 +43,11 @@ def main(argv=None):
     execute_subparsers = execute_subparser.add_subparsers(
         dest='benchmark', title='benchmark', description='benchmark', help='')
 
-    execute_subparser.add_argument('--json-file', type=str, default=None)
-    execute_subparser.add_argument('--checkpoint', action='store_true', help='enable checkpointing')
-    execute_subparser.add_argument('--no-resume', action='store_false', help='do not resume the checkpoint')
+    execute_subparser.add_argument('--save-out', type=str, default=None)
+    execute_subparser.add_argument('--checkpoint', type=str, default=None,
+                                   help='enable checkpointing & provide a file name')
+    execute_subparser.add_argument('--no-resume', action='store_true',
+                                   help='do not resume the checkpoint')
     execute_subparsers = build_benchmark_subparsers(execute_subparsers)
 
     for subparser in execute_subparsers:
@@ -121,8 +123,6 @@ def load_config(config_dir_path, benchmark, task, hpo_role, name):
     config_path = os.path.join(config_dir_path, "{benchmark}/{task}/{role}/{name}.yaml").format(
         benchmark=benchmark, task=task, role=hpo_role, name=name)
 
-    print(config_path)
-
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
@@ -135,8 +135,13 @@ def load_config(config_dir_path, benchmark, task, hpo_role, name):
     return config
 
 
+def create_tags(version, dispatcher, configurator, seed, workers, problem):
+    env_tags = (f'd-{dispatcher} c-{configurator} s-{seed} w-{workers}').split(' ')
+    return [version] + env_tags + problem.tags
+
+
 def execute(benchmark, options):
-    print(f'Benchmark: {benchmark.name}')
+    logger.info(f'Benchmark: {benchmark.name}')
 
     optim_data = nesteddict()
     problem_configurations = itertools.product(
@@ -144,7 +149,7 @@ def execute(benchmark, options):
         options.configurators, options.seeds, options.workers)
 
     for problem, dispatcher, configurator, seed, workers in problem_configurations:
-        print(f'{dispatcher} - {configurator} - workers:{workers} - seed:{seed} - problem:{problem.tags}')
+        logger.info(f'{dispatcher} - {configurator} - workers:{workers} - seed:{seed} - problem:{problem.tags}')
 
         dispatcher_config = load_config(options.config_dir_path, benchmark.name, 'hpo', 'dispatcher',
                                         dispatcher)
@@ -157,15 +162,17 @@ def execute(benchmark, options):
 
         dispatcher_config['configurator_config'] = configurator_config
 
-        trials = execute_problem(dispatcher_config, problem, options.max_trials, workers, options)
+        tags = create_tags('1', dispatcher, configurator, seed, workers, problem)
+
+        trials = execute_problem(dispatcher_config, problem, options.max_trials, workers, options, tags)
 
         results = process_trials(trials)
 
         optim_data[','.join(problem.tags)][dispatcher][configurator][seed][workers] = results
 
-    if options.json_file is not None:
+    if options.save_out is not None:
         data = json.dumps(optim_data, indent=4)
-        json_file = open(options.json_file, 'w')
+        json_file = open(options.save_out, 'w')
         json_file.write(data)
         json_file.write('\n')
         json_file.close()
@@ -181,30 +188,49 @@ def process_trials(trials):
     return results
 
 
-def execute_problem(dispatcher_config, problem, max_trials, workers, opt):
+def checkpoint_key(tags):
+    tags = list(tags)
+    tags.sort()
+
+    import hashlib
+    sh = hashlib.sha256()
+    for tag in tags:
+        sh.update(tag.encode('utf-8'))
+    return sh.hexdigest()[:15]
+
+
+def execute_problem(dispatcher_config, problem, max_trials, workers, opt, tags=None):
 
     dispatcher = repro.hpo.dispatcher.base.build_dispatcher(problem.space, **dispatcher_config)
 
     manager = HPOManager(dispatcher, problem.run, max_trials=max_trials, workers=workers)
 
-    if os.path.exists(opt.json_file):
+    problem_hex = checkpoint_key(tags)
+    chk_file = f'{opt.checkpoint}/{problem_hex}'
+
+    logger.info(f'Looking for previous checkpoint at {chk_file}: ...')
+
+    if os.path.exists(chk_file):
+        logger.info('Checkpoint was found')
+
         if not opt.no_resume:
-            logger.info('Found checkpoint file! Resuming ...')
-            manager = resume_from_checkpoint(manager, opt.json_file)
+            logger.info('Resuming ...')
+            manager = resume_from_checkpoint(manager, chk_file)
         else:
-            logger.info('Ignoring Checkpoint file.. It will be overridden!')
+            logger.warning('Ignoring Checkpoint file.. It will be overridden!')
+    else:
+        logger.info('No Checkpoint!')
 
     if opt.checkpoint:
-        path = opt.json_file.split('/')
-        file_name = path[-1]
-        path = '/'.join(path[:-1])
+        path = opt.checkpoint
+        file_name = chk_file
         if path == '':
             path = '.'
 
-        logger.info(f'Enabling checkpoints in {path} at {file_name}')
+        logger.info(f'Enabling checkpoints in {file_name}')
 
         manager.enable_checkpoints(
-            name=file_name,
+            name=problem_hex,
             every=None,
             archive_folder=path
         )

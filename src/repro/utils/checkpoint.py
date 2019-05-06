@@ -27,7 +27,7 @@ class CheckPointer(MonitorComponent):
     def _save_obj(self, name, obj):
         from repro.utils.resumable import state
 
-        file_name = f'{self.archive_folder}/{name}.json'
+        file_name = f'{self.archive_folder}/{name}'
         with open(file_name, 'w') as f:
             json.dump(state(obj), f, indent=2)
 

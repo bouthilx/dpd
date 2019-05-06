@@ -90,7 +90,7 @@ class COCOBenchmark:
 def coco_run(problem_config, callback=None, **params):
     problem = build_problem(**problem_config)
     objective = problem([params[get_dim_name(dim)] for dim in range(problem.dimension)])
-    print(params, objective)
+
     if callback:
         callback(step=1, objective=objective, finished=True)
 
