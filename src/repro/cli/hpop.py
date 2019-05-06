@@ -1,5 +1,7 @@
+from collections import defaultdict
 import argparse
 import itertools
+import functools
 import logging
 import os
 import pprint
@@ -13,13 +15,16 @@ except ImportError:
     mahler = None
 
 from repro.benchmark.base import build_benchmark, build_benchmark_subparsers
-import repro.hpo.configurator.base
-import repro.hpo.dispatcher.base
 
-from repro.hpo.dispatcher.dispatcher import HPOManager
+import repro.hpo.trial.base
+from repro.hpo.dispatcher.base import build_dispatcher
+from repro.hpo.resource.base import build_resource_manager
+from repro.hpo.trial.base import build_trial
+from repro.hpo.manager import HPOManager
 from repro.utils.nesteddict import nesteddict
 from repro.utils.checkpoint import resume_from_checkpoint
 
+LOG_FORMAT = '%(asctime)s:%(name)s:%(message)s'
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +57,8 @@ def main(argv=None):
 
     for subparser in execute_subparsers:
         subparser.add_argument(
-            '--backend', type=str, default='builtin', choices=['builtin', 'mahler'],
+            '--backend', type=str, default='builtin',
+            choices=list(repro.hpo.trial.base.factories.keys()),
             help=('Backend to run jobs in parallel. Large benchmarks may not scale well with '
                   'builtin backend.'))
 
@@ -89,25 +95,29 @@ def main(argv=None):
         continue
 
     # TODO: Add these arguments only for Mahler backend
-    # for register_subparser in register_subparsers:
-    #     register_subparser.add_argument('--version', type=str, required=True)
-    #     register_subparser.add_argument('--container', type=str, required=True)
+    if 'mahler' in list(repro.hpo.trial.base.factories.keys()):
+        for register_subparser in execute_subparsers:
+            register_subparser.add_argument('--version', type=str)
+            register_subparser.add_argument('--container', type=str)
     #     register_subparser.add_argument(
     #         '--force', action='store_true', default=False,
     #         help='Register even if another similar task already exists')
 
     for visualize_subparser in visualize_subparsers:
-        visualize_subparser.add_argument('--version', type=str, required=True)
         visualize_subparser.add_argument(
             '--output', type=str,
             default='f{id:03d}-d{dimension:03d}.png')
 
     options = parser.parse_args(argv)
 
+    if options.backend == 'mahler':
+        assert options.container is not None
+        assert options.version is not None
+
     levels = {0: logging.WARNING,
               1: logging.INFO,
               2: logging.DEBUG}
-    logging.basicConfig(level=levels.get(options.verbose, logging.DEBUG))
+    logging.basicConfig(level=levels.get(options.verbose, logging.DEBUG), format=LOG_FORMAT)
 
     benchmark = build_benchmark(name=options.benchmark, **vars(options))
 
@@ -151,10 +161,10 @@ def execute(benchmark, options):
     for problem, dispatcher, configurator, seed, workers in problem_configurations:
         logger.info(f'{dispatcher} - {configurator} - workers:{workers} - seed:{seed} - problem:{problem.tags}')
 
-        dispatcher_config = load_config(options.config_dir_path, benchmark.name, 'hpo', 'dispatcher',
-                                        dispatcher)
-        configurator_config = load_config(options.config_dir_path, benchmark.name, 'hpo', 'configurator',
-                                          configurator)
+        dispatcher_config = load_config(options.config_dir_path, benchmark.name, 'hpo',
+                                        'dispatcher', dispatcher)
+        configurator_config = load_config(options.config_dir_path, benchmark.name, 'hpo',
+                                          'configurator', configurator)
 
         for config in [dispatcher_config, configurator_config]:
             config['seed'] = seed
@@ -162,13 +172,17 @@ def execute(benchmark, options):
 
         dispatcher_config['configurator_config'] = configurator_config
 
-        tags = create_tags('1', dispatcher, configurator, seed, workers, problem)
+        tags = create_tags(options.version, dispatcher, configurator, seed, workers, problem)
 
-        trials = execute_problem(dispatcher_config, problem, options.max_trials, workers, options, tags)
+        trials, observations = execute_problem(
+            dispatcher_config, problem, options.max_trials,
+            workers, options, tags)
 
         results = process_trials(trials)
 
         optim_data[','.join(problem.tags)][dispatcher][configurator][seed][workers] = results
+
+        plot(trials, observations)
 
     if options.save_out is not None:
         data = json.dumps(optim_data, indent=4)
@@ -180,10 +194,17 @@ def execute(benchmark, options):
         pprint.pprint(optim_data)
 
 
+def create_tags(version, dispatcher, configurator, seed, workers, problem):
+    env_tags = (f'd-{dispatcher} c-{configurator} s-{seed} w-{workers}').split(' ')
+    return [version] + env_tags + problem.tags
+
+
 def process_trials(trials):
     results = []
     for trial in sorted(trials, key=lambda trial: trial.creation_time):
-        results.append({'params': trial.params, 'objective': trial.get_last_results()[-1]['objective']})
+        result = trial.get_last_results()
+        if result:
+            results.append({'params': trial.params, 'objective': result[-1]['objective']})
 
     return results
 
@@ -199,21 +220,27 @@ def checkpoint_key(tags):
     return sh.hexdigest()[:15]
 
 
-def execute_problem(dispatcher_config, problem, max_trials, workers, opt, tags=None):
+def execute_problem(dispatcher_config, problem, max_trials, workers, options, tags):
 
-    dispatcher = repro.hpo.dispatcher.base.build_dispatcher(problem.space, **dispatcher_config)
+    backend_config = dict(tags=tags, container=options.container)
 
-    manager = HPOManager(dispatcher, problem.run, max_trials=max_trials, workers=workers)
+    dispatcher = build_dispatcher(problem.space, **dispatcher_config)
+
+    resource_manager = build_resource_manager(options.backend, workers=workers, operator=problem.run, **backend_config)
+    trial_factory = functools.partial(build_trial, name=options.backend, **backend_config)
+
+    manager = HPOManager(resource_manager, dispatcher, problem.run, trial_factory,
+                         max_trials=max_trials, workers=workers)
 
     problem_hex = checkpoint_key(tags)
-    chk_file = f'{opt.checkpoint}/{problem_hex}'
+    chk_file = f'{options.checkpoint}/{problem_hex}'
 
     logger.info(f'Looking for previous checkpoint at {chk_file}: ...')
 
     if os.path.exists(chk_file):
         logger.info('Checkpoint was found')
 
-        if not opt.no_resume:
+        if not options.no_resume:
             logger.info('Resuming ...')
             manager = resume_from_checkpoint(manager, chk_file)
         else:
@@ -221,8 +248,8 @@ def execute_problem(dispatcher_config, problem, max_trials, workers, opt, tags=N
     else:
         logger.info('No Checkpoint!')
 
-    if opt.checkpoint:
-        path = opt.checkpoint
+    if options.checkpoint:
+        path = options.checkpoint
         file_name = chk_file
         if path == '':
             path = '.'
@@ -236,8 +263,51 @@ def execute_problem(dispatcher_config, problem, max_trials, workers, opt, tags=N
         )
 
     manager.run()
+    resource_manager.terminate()
 
-    return manager.trials
+    return list(manager.trials), dispatcher.observations
+
+
+def plot(trials, observations):
+
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure()
+    axes = fig.subplots(nrows=3, ncols=1)  # , sharex=True)
+
+    density = defaultdict(int)
+
+    hpo_objectives = []
+    n = 0
+
+    for trial in sorted(trials, key=lambda trial: trial.creation_time):
+        n += 1
+        trial_observations = observations[trial.id]
+
+        x = list(sorted(filter(lambda step: step > 0, trial_observations.keys())))
+        y = [trial_observations[i] for i in x]
+
+        if not y:
+            continue
+
+        for i in x:
+            density[i] += 1
+
+        min_y = min(y)
+        if hpo_objectives:
+            hpo_objectives.append(min(hpo_objectives[-1], min_y))
+        else:
+            hpo_objectives.append(min_y)
+
+        axes[1].plot(x, y, color='blue')
+
+    axes[0].plot(range(len(hpo_objectives)), hpo_objectives)
+    # axes[0].set_yscale('log')
+
+    x, y = list(zip(*list(sorted(density.items()))))
+    axes[2].plot(x, [int(v / n * 100 + 0.5) for v in y])
+
+    plt.show()
 
 
 def visualize(benchmark, options):

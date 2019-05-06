@@ -501,7 +501,7 @@ def convert_mahler_task_to_trial(trial):
                 objective=objective)
 
 
-if mahler is not None:
+if mahler is not None and train:
     create_trial = mahler.operator(resources={'cpu': 2, 'mem': '20MB'},
                                    resumable=True)(create_trial)
     train = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20BG'}, resumable=True)(train)

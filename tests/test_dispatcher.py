@@ -1,7 +1,8 @@
 import time
 
 from repro.utils.chrono import Chrono
-from repro.hpo.dispatcher.dispatcher import HPOManager, HPODispatcher
+from repro.hpo.dispatcher.dispatcher import HPODispatcher
+from repro.hpo.manager import HPOManager
 from repro.utils.checkpoint import resume_from_checkpoint
 
 mock_sleep = 10
@@ -120,7 +121,7 @@ def run_mock_suspend_resume():
 
     start_and_suspend()
 
-    dispatcher = resume_and_finish()
+    resume_and_finish()
 
 
 if __name__ == '__main__':

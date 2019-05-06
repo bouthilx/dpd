@@ -1,0 +1,8 @@
+name: dpd
+initial_population: 100
+final_population: 1
+n_steps: 30
+window_size: 11
+n_points: 100
+min_population: 3
+population_growth_brake: 0.75

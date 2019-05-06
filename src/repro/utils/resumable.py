@@ -8,15 +8,16 @@ _resumable_aspect = {}
 
 class ResumableAspect:
     """
-        > aspect-oriented programming (AOP) is a programming paradigm that aims to increase modularity
-        > by allowing the separation of cross-cutting concerns.
-        > It does so by adding additional behavior to existing code (an advice) without modifying the code itself.
+        > aspect-oriented programming (AOP) is a programming paradigm that aims to increase
+        > modularity by allowing the separation of cross-cutting concerns.
+        > It does so by adding additional behavior to existing code (an advice) without modifying
+        > the code itself.
 
-        Here we implement all the necessary tools to resume HPOManager, Trial and HPODispatcher without modifying them.
-        The needs to be registered at the end.
+        Here we implement all the necessary tools to resume HPOManager, Trial and HPODispatcher
+        without modifying them. The needs to be registered at the end.
 
-        Resume Aspect implements two methods `state` which serialize a given object into a dict and a `resume`
-        that initialize a given object to the specified state
+        Resume Aspect implements two methods `state` which serialize a given object into a dict and
+        a `resume` that initialize a given object to the specified state
     """
     @staticmethod
     def register(impl: 'ResumableAspect', cls):
@@ -56,11 +57,13 @@ class ResumeTrialAspect(ResumableAspect):
 
 class ResumeManagerAspect(ResumableAspect):
     def state_attributes(self):
-        return {'trial_count', 'running_trials', 'suspended_trials', 'finished_trials', 'dispatcher'}
+        return {'trial_count', 'running_trials', 'suspended_trials', 'finished_trials',
+                'dispatcher'}
 
     def resume(self, obj: 'HPOManager', state: Dict[str, any]):
-        from repro.hpo.dispatcher.trial import Trial
+        from repro.hpo.trial.builtin import Trial
 
+        # TODO: Restore using the proper backend
         def make_trial(trial_state, queue):
             t = Trial(trial_state['id'], obj.task, trial_state['params'], queue)
             t.latest_results = trial_state['latest_results']
@@ -70,7 +73,8 @@ class ResumeManagerAspect(ResumableAspect):
         obj.trial_count = state['trial_count']
 
         obj.running_trials = {make_trial(t, obj.manager.Queue()) for t in state['running_trials']}
-        obj.suspended_trials = {make_trial(t, obj.manager.Queue()) for t in state['suspended_trials']}
+        obj.suspended_trials = {make_trial(t, obj.manager.Queue())
+                                for t in state['suspended_trials']}
         obj.finished_trials = {make_trial(t, None) for t in state['finished_trials']}
 
         for trial in obj.running_trials:
@@ -81,7 +85,8 @@ class ResumeManagerAspect(ResumableAspect):
 
 class ResumeDispatcherAspect(ResumableAspect):
     def state_attributes(self):
-        return {'trial_count', 'seeds', 'observations', 'buffered_observations', 'finished', 'params'}
+        return {'trial_count', 'seeds', 'observations', 'buffered_observations', 'finished',
+                'params'}
 
     def resume(self, obj: 'HPODispatcher', state: Dict[str, any]):
         super(ResumeDispatcherAspect, self).resume(obj, state)
@@ -114,8 +119,10 @@ class ResumeList(ResumableAspect):
 
 def _register():
     if set not in _resumable_aspect:
-        from repro.hpo.dispatcher.trial import Trial
-        from repro.hpo.dispatcher.dispatcher import HPODispatcher, HPOManager
+        # TODO: Verify that different backends are supported properly
+        from repro.hpo.trial.builtin import Trial
+        from repro.hpo.dispatcher.dispatcher import HPODispatcher
+        from repro.hpo.manager import HPOManager
 
         ResumableAspect.register(ResumeSet(), set)
         ResumableAspect.register(ResumeList(), list)
