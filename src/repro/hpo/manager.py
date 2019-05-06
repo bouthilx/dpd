@@ -161,6 +161,7 @@ class HPOManager:
             trial.stop()
 
         self.manager.shutdown()
+        self.resource_manager.terminate()
 
     def _queue_suggest(self) -> None:
         """ dummy function used to queue an async call to self.suggest """

@@ -2,6 +2,7 @@ import getpass
 import logging
 import os
 import pprint
+import signal
 import time
 import uuid
 from multiprocessing import Process
@@ -33,6 +34,20 @@ COMMAND_TEMPLATE = "mahler execute{container}{tags}{options}"
 SUBMIT_COMMANDLINE_TEMPLATE = "{flow} launch {command}"
 
 
+def append_signal(sig, f):
+
+    old = None
+    if callable(signal.getsignal(sig)):
+        old = signal.getsignal(sig)
+
+    def helper(*args, **kwargs):
+        if old is not None:
+            old(*args, **kwargs)
+        f(*args, **kwargs)
+
+    signal.signal(sig, helper)
+
+
 # NOTE: When submitting sections with mahler, need to take into account how many workers each of
 #       them has.
 #       TODO: Evaluate number of workers per sections based on resource[usage]
@@ -61,8 +76,10 @@ class MahlerResourceManager(ResourceManager):
         # TODO: Support cpu job only. Force gpu resource until then.
         self.resources['gpu'] = 1
 
-    def start(self):
-        print(f'mahler -v execute --tags {" ".join(self.tags)} --num-workers {self.workers}')
+        append_signal(signal.SIGTERM, self.stop_gracefully)
+
+    def run(self):
+        self.stop = False
 
         for host_name, host in self.hosts.items():
             scheduler = Scheduler(self.id, self.user, host_name, self.workers, self.workers_per_job,
@@ -74,9 +91,14 @@ class MahlerResourceManager(ResourceManager):
             scheduler.start()
             self.schedulers.append(scheduler)
 
-    def stop(self):
+        while not self.stop:
+            time.sleep(1)
+
+    def stop_gracefully(self, signum=None, frame=None):
         for scheduler in self.schedulers:
-            scheduler.stop()
+            scheduler.terminate()
+
+        self.stop = True
 
             # Duplicate workers on all clusters
             # Count co-workers and dedicated workers
@@ -101,10 +123,12 @@ class Scheduler(Process):
         self.container = container
         self.monitoring_interval = monitoring_interval
         self.tags = ['worker']
+        append_signal(signal.SIGTERM, self.stop_gracefully)
 
     def init(self):
         """
         """
+        self.stop = False
         logger.info(f'{self.user}@{self.host} Initiating ssh connection')
         self.connection = Connection(self.host, user=self.user)
         logger.info(f'{self.user}@{self.host} Pulling {self.container} on logging node')
@@ -139,9 +163,9 @@ class Scheduler(Process):
                 continue
 
             if state not in states:
-                states[line] = 0
+                states[state] = 0
 
-            states[line] += 1
+            states[state] += 1
 
             if name == self.id and state not in workers:
                 workers[state] = 0
@@ -174,13 +198,19 @@ class Scheduler(Process):
                 logger.info(f'{self.user}@{self.host} No task to submit')
 
             logger.debug(f'{self.user}@{self.host} Waiting {self.monitoring_interval} seconds')
-            time.sleep(self.monitoring_interval)
+            start = time.time()
+            while time.time() - start < self.monitoring_interval and not self.stop:
+                time.sleep(1)
 
-    def stop_gracefully(self):
+            if self.stop:
+                logger.info(f'{self.user}@{self.host} Leaving')
+                break
+
+    def stop_gracefully(self, signum=None, frame=None):
         # scancel the dedicated workers?
         # maybe not, they can keep running other tasks
         # But, the manager should make sure to stop all trials prior leaving.
-        pass
+        self.stop = True
 
     def submit(self, n_workers):
 

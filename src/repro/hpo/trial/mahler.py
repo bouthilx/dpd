@@ -39,6 +39,20 @@ def mahler_callback(mahler_config, **kwargs):
     # Map task status from mahler to Trial interface.
 
 
+def append_signal(sig, f):
+
+    old = None
+    if callable(signal.getsignal(sig)):
+        old = signal.getsignal(sig)
+
+    def helper(*args, **kwargs):
+        if old is not None:
+            old(*args, **kwargs)
+        f(*args, **kwargs)
+
+    signal.signal(sig, helper)
+
+
 # TODO: Use mahler.scheduler.remoteflow to submit N workers and make sure there is always N workers
 #       available (that will be in the HPOManager)
 class MahlerProcess(Process):
@@ -54,7 +68,7 @@ class MahlerProcess(Process):
         self.operator_kwargs['tags'] = operator_kwargs['tags'] + [trial_id] + ['worker']
         self.task = None
         self.mahler_client = None
-        signal.signal(signal.SIGTERM, self.suspend)
+        append_signal(signal.SIGTERM, self.suspend)
 
     def init(self):
         self.metrics = []
