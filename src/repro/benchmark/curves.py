@@ -74,7 +74,7 @@ def curve_run(a, b, callback):
 
 
 if mahler:
-    resources = {'cpu': 1, 'mem': '10MB', 'usage': {'cpu': {'util': 0, 'memory': 10 * 2 ** 20}}}
+    resources = {'cpu': 1, 'mem': '1GB', 'usage': {'cpu': {'util': 0, 'memory': 2 ** 30}}}
     curve_run = mahler.operator(resources=resources)(curve_run)
 
 
