@@ -39,7 +39,6 @@ class COCOBenchmark:
             kwargs = {}
             value = getattr(self, name)
 
-            print(name, value)
             if isinstance(value, list):
                 kwargs['choices'] = value
                 kwargs['nargs'] = '*'

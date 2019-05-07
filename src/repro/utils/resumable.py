@@ -116,9 +116,19 @@ class ResumeNdArray(ResumableAspect):
         return obj.tolist()
 
 
+class ResumeNpInt(ResumableAspect):
+    def state(self, obj) -> any:
+        return int(obj)
+
+
 class ResumeSet(ResumableAspect):
     def state(self, obj) -> any:
         return [state(i) for i in obj]
+
+
+class ResumeDict(ResumableAspect):
+    def state(self, obj) -> any:
+        return {k: state(v) for k, v in obj.items()}
 
 
 class ResumeList(ResumableAspect):
@@ -135,7 +145,10 @@ def _register():
         from repro.hpo.manager import HPOManager
 
         ResumableAspect.register(ResumeSet(), set)
+        ResumableAspect.register(ResumeDict(), dict)
         ResumableAspect.register(ResumeList(), list)
+        ResumableAspect.register(ResumeNpInt(), numpy.int32)
+        ResumableAspect.register(ResumeNpInt(), numpy.int64)
         ResumableAspect.register(ResumeNdArray(), numpy.ndarray)
         ResumableAspect.register(ResumeDispatcherAspect(), HPODispatcher)
         ResumableAspect.register(ResumeResourceManagerAspect(), ResourceManager)

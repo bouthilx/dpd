@@ -30,7 +30,14 @@ setup(
             ],
         'mini': [
             'torch==1.0.0', 'torchvision', 'torchnet', 'pytorch-ignite',
-            'filelock==3.0.10', 'h5py==2.9.0'],
+            'filelock==3.0.10', 'h5py==2.9.0', 'Pillow==5.3.0'],
+        'dpd': [
+            'bson', 'cotyledon', 'mahler.registry.mongodb', 'numpy', 'scipy',
+            ],
+        'configure': [
+            'mahler.registry.mongodb',
+            'orion.core==db2d068',
+            'orion.algo.skopt==577aabf'],
         'deploy': [
             'mahler.core==83438f1',
             'mahler.registry.mongodb==87146aa',

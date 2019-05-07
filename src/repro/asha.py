@@ -21,7 +21,38 @@ from repro.hpo.base import build_hpo
 logger = logging.getLogger(__name__)
 
 
-run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20BG'}, resumable=True)(train)
+usage = {
+    'lenet': {
+        'gpu': {
+            'memory': 2**30,  # 1 GB
+            'util': 10}},
+    'mobilenetv2': {
+        'gpu': {
+            'memory': 3 * 2**30,  # 1 GB
+            'util': 40}},
+    'vgg11': {
+        'gpu': {
+            'memory': 3 * 2**30,  # 1 GB
+            'util': 40}},
+    'vgg19': {
+        'gpu': {
+            'memory': 4 * 2**30,  # 1 GB
+            'util': 60}},
+    'resnet18': {
+        'gpu': {
+            'memory': 3 * 2**30,  # 1 GB
+            'util': 60}},
+    'resnet101': {
+        'gpu': {
+            'memory': 4 * 2**30,  # 1 GB
+            'util': 60}},
+    'else': {
+        'gpu': {
+            'memory': 4 * 2 ** 30,  # 1 GB
+            'util': 50}}}
+
+
+run = mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB'}, resumable=True)(train)
 
 
 # run needs
@@ -153,7 +184,8 @@ def register_best_trials(mahler_client, configurator, tags, container, max_epoch
     mean_config = merge(config, mean_args)
 
     print('\nNew trials registered for distribution evaluation:')
-    for name, config in [('min', min_config), ('max', max_config), ('mean', mean_config)]:
+    # for name, config in [('min', min_config), ('max', max_config), ('mean', mean_config)]:
+    for name, config in [('min', min_config)]:
         for i in range(number_of_seeds - existing_trials[name]):
             # This time we want to test error as well.
             config['compute_test_error_rates'] = True
@@ -172,7 +204,12 @@ def register_new_trial(mahler_client, trial_config, tags, container):
     trial_config = copy.deepcopy(trial_config)
     trial_config['model_seed'] = random.uniform(1, 10000)
     trial_config['sampler_seed'] = random.uniform(1, 10000)
-    new_task = mahler_client.register(run.delay(**trial_config), container=container, tags=tags)
+    model_usage = usage.get(trial_config['model']['name'], usage['else'])
+    resources = copy.deepcopy(run.resources)
+    resources['usage'] = model_usage
+    new_task = mahler_client.register(
+        run.delay(**trial_config), container=container, tags=tags,
+        resources=resources)
     print(new_task.id, sorted(new_task.tags))
     return new_task
 
@@ -188,7 +225,8 @@ def sample_new_config(configurator, config):
 #       (should submit based on largest request and enable running small tasks in large resource
 #        workers)
 # @mahler.operator(resources={'cpu':1, 'mem':'1GB'})
-@mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB'})
+@mahler.operator(resources={'cpu': 4, 'gpu': 1, 'mem': '20GB',
+                            'usage': {'gpu': {'memory': 0, 'util': 0}}})
 def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
                  max_epochs, max_workers, max_resource, number_of_seeds):
 
@@ -244,15 +282,11 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
         mahler_client.close()
         raise SignalSuspend(message)
 
-    if configurator.is_completed():
-        new_best_trials = register_best_trials(
-            mahler_client, configurator, tags, container, max_epochs, max_resource, number_of_seeds)
-        mahler_client.close()
-        return new_best_trials
-
     print("Generating new configurations")
     new_trial_tasks = []
     for i in range(max_workers - n_uncompleted):
+        if configurator.is_completed():
+            break
         config['max_epochs'] = max_epochs
         new_task_config = sample_new_config(configurator, config)
         trial_task = register_new_trial(
@@ -260,6 +294,12 @@ def create_trial(config_dir_path, dataset_name, model_name, configurator_config,
         # pprint.pprint(trial_task.to_dict(report=True))
         configurator.observe([trial_task.to_dict(report=True)])
         new_trial_tasks.append(trial_task)
+
+    if configurator.is_completed():
+        new_best_trials = register_best_trials(
+            mahler_client, configurator, tags, container, max_epochs, max_resource, number_of_seeds)
+        mahler_client.close()
+        return new_best_trials
 
     # TODO: We should remove this, there is normally only one create_trial task at a time for a
     #       given set of tags.

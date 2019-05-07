@@ -1,10 +1,16 @@
 data:
     name: fashionmnist
     batch_size: 128
-    num_workers: 5
 
 model:
     name: preactresnet18
+    conv:
+        kernel_size: 3
+        stride: 1
+        padding: 1
+    maxpool: null
+    avgpool:
+        kernel_size: 4
 
 optimizer:
     name: sgd

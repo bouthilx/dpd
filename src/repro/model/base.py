@@ -31,7 +31,21 @@ def get_checkpoint_file_path():
 
 
 def build_model(name=None, **kwargs):
-    return factories[name](**kwargs)
+    return initialize_model(factories[name](**kwargs))
+
+
+def initialize_model(model):
+    '''Init model using He for Linear and Conv2d, and 0 - 1 for BatchNorm.'''
+    for m in model.modules():
+        if isinstance(m, (torch.nn.Linear, torch.nn.Conv2d)):
+            torch.nn.init.kaiming_normal_(m.weight)
+            if m.bias is not None:
+                torch.nn.init.constant_(m.bias, 0.0)
+        elif isinstance(m, (torch.nn.BatchNorm1d, torch.nn.BatchNorm2d)):
+            if m.affine:
+                torch.nn.init.constant_(m.weight, 1.0)
+                torch.nn.init.constant_(m.bias, 0.0)
+    return model
 
 
 def save_checkpoint(file_path, model, optimizer, lr_scheduler, **metadata):

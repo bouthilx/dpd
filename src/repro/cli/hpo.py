@@ -1,6 +1,7 @@
 import argparse
 import itertools
 import math
+import sys
 
 import mahler.client as mahler
 
@@ -30,18 +31,31 @@ def total_trials(max_epochs, reduction_factor, max_resource, fidelity_space, **k
 
 
 MAX_EPOCHS = 120
-MAX_WORKERS = 10
+MAX_WORKERS = 30
 MAX_RESOURCE = 20
-NUMBER_OF_SEEDS = 20
+NUMBER_OF_SEEDS = 10
 
-# asha_config = dict(name='asha', reduction_factor=4, max_resource=MAX_RESOURCE,
-#                    fidelity_space=dict(max_epochs=[15, 30, 60]))
-
-asha_config = dict(name='asha', reduction_factor=1, max_resource=MAX_RESOURCE,
-                   fidelity_space=dict(max_epochs=[1, 2, 4]))
+asha_config = dict(name='asha', reduction_factor=4, max_resource=MAX_RESOURCE,
+                   fidelity_space=dict(max_epochs=[15, 30, 60]))
 
 random_search_config = dict(name='random_search',
                             max_trials=total_trials(MAX_EPOCHS, **asha_config))
+
+if '--debug' in sys.argv:
+    MAX_EPOCHS = 4
+    MAX_WORKERS = 20
+    MAX_RESOURCE = 10
+    NUMBER_OF_SEEDS = 5
+
+    asha_config = dict(name='asha', reduction_factor=2, max_resource=MAX_RESOURCE,
+                       fidelity_space=dict(max_epochs=[1, 2, 4]))
+
+    random_search_config = dict(name='random_search',
+                                max_trials=total_trials(MAX_EPOCHS, **asha_config))
+
+
+print("INFO: Number of full trials: {}".format(total_trials(MAX_EPOCHS, **asha_config)))
+
 
 configurator_configs = dict(asha=asha_config, random_search=random_search_config)
 
@@ -74,6 +88,9 @@ def main(argv=None):
         default=DEFAULT_CONFIG_DIR_PATH,
         help=('Path of directory containing the configurations of the datasets and models. '
               'Default: {}').format(DEFAULT_CONFIG_DIR_PATH))
+
+    parser.add_argument(
+        '--debug', action='store_true', default=False, help='Deploy small setup for debugging.')
 
     options = parser.parse_args(argv)
 

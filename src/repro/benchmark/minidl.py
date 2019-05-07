@@ -46,7 +46,6 @@ class MiniDLBenchmark:
             kwargs = {}
             value = getattr(self, name)
 
-            print(name, value)
             if isinstance(value, list):
                 kwargs['choices'] = value
                 kwargs['nargs'] = '*'
@@ -96,7 +95,7 @@ def expand_problem_config(dataset, dataset_fold, model, optimizer):
     return {
         'data': {
             'name': dataset,
-            'fold': dataset_fold,
+            'seed': (0, dataset_fold),
             'mini': True,
             'batch_size': 128},
         'model': {
@@ -140,6 +139,11 @@ MODEL_SPACES = {
 OPTIMIZER_SPACES = {
     'sgd': {
         'lr': 'loguniform(1.0e-5, 1.0)',
+        'lr_scheduler': {
+            'patience': 'loguniform(5, 50, discrete=True)',
+            'factor': 'loguniform(0.05, 0.5)'
+        },
+        'momentum': 'uniform(0., 0.9)',
         'weight_decay': 'loguniform(1.0e-10, 1.0e-3)'
     },
     'adam': {
