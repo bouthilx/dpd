@@ -14,7 +14,7 @@ try:
 except ImportError:
     mahler = None
 
-from repro.benchmark.base import build_benchmark, build_benchmark_subparsers
+from repro.benchmark.base import build_benchmark, build_problem, build_benchmark_subparsers
 
 import repro.hpo.trial.base
 from repro.hpo.dispatcher.base import build_dispatcher

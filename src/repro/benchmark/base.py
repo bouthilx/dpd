@@ -4,8 +4,12 @@ from repro.utils.factory import fetch_factories
 factories = fetch_factories('repro.benchmark', __file__)
 
 
-def build_benchmark(name=None, **kwargs):
+def build_benchmark(name, **kwargs):
     return factories[name](**kwargs)
+
+
+def build_problem(name, config):
+    return factories[name]().build(**config)
 
 
 def build_benchmark_subparsers(subparsers):

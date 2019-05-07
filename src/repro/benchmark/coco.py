@@ -13,7 +13,6 @@ except ImportError:
 
 try:
     import mahler.client as mahler
-    from mahler.core.utils.errors import SignalInterruptTask, SignalSuspend
 except ImportError:
     mahler = None
 
@@ -57,34 +56,37 @@ class COCOBenchmark:
     @property
     def problems(self) -> Iterable[any]:
         prod_attributes = ['problem_ids', 'dimensions', 'instances']
-        problem_attributes = list(map(lambda s: s.rstrip('s'), prod_attributes))
-        ProblemType = namedtuple('COCOProblem', problem_attributes + ['tags', 'run', 'space'])
-        fixed_attributes = []
 
         configs = itertools.product(*[getattr(self, name) for name in prod_attributes])
+
+        for config in configs:
+            problem = self.build(*config)
+            if problem:
+                yield problem
+
+    def build(self, problem_id, dimension, instance):
+        fixed_attributes = []
         benchmark_config = dict(getattr(self, name) for name in fixed_attributes)
+        ProblemType = namedtuple('COCOProblem', ['problem_id', 'dimension', 'instance', 'tags',
+                                                 'run', 'space', 'config'])
+        try:
+            # function, dimension, instance, observer=None
+            problem = suite.get_problem_by_function_dimension_instance(
+                function=problem_id,
+                dimension=dimension,
+                instance=instance
+            )
+        except cocoex.exceptions.NoSuchProblemException:
+            return None
 
-        for problem_config in configs:
-            print(type(problem_config), problem_config)
-            print(benchmark_config)
-            try:
-                # function, dimension, instance, observer=None
-                problem = suite.get_problem_by_function_dimension_instance(
-                    function=problem_config[0],
-                    dimension=problem_config[1],
-                    instance=problem_config[2]
-                )
-            except cocoex.exceptions.NoSuchProblemException:
-                continue
-            
-            # TODO: inspect build_problem arguments to automatically map with problem_config
-            problem_config = dict(zip(problem_attributes, problem_config))
-            benchmark_config.update(problem_config)
-            benchmark_config['tags'] = create_tags(**problem_config)
-            benchmark_config['run'] = functools.partial(coco_run, problem_config=problem_config)
-            benchmark_config['space'] = build_space(problem)
+        # TODO: inspect build_problem arguments to automatically map with problem_config
+        problem_config = dict(problem_id=problem_id, dimension=dimension, instance=instance)
+        benchmark_config.update(problem_config)
+        benchmark_config['tags'] = create_tags(**problem_config)
+        benchmark_config['run'] = functools.partial(coco_run, problem_config=problem_config)
+        benchmark_config['space'] = build_space(problem)
 
-            yield ProblemType(**benchmark_config)
+        return ProblemType(config=problem_config, **benchmark_config)
 
 
 def coco_run(problem_config, callback=None, **params):
@@ -136,7 +138,7 @@ def build_space(problem, **space_config):
     return space
 
 
-#if mahler is not None:
+# if mahler is not None:
 #    hpo_coco = mahler.operator(resources={'cpu': 2, 'mem': '20MB'}, resumable=False)(hpo_coco)
 
 
