@@ -4,12 +4,11 @@ import os
 import pprint
 import signal
 import time
-import uuid
 from multiprocessing import Process
 
 try:
     from fabric import Connection
-except:
+except ImportError:
     Connection = None
 
 try:
@@ -56,7 +55,6 @@ class MahlerResourceManager(ResourceManager):
 
     def __init__(self, workers, resources, container, tags, workers_per_job=10, monitoring_interval=300):
         super(MahlerResourceManager, self).__init__(workers, resources)
-        self.id = uuid.uuid4().hex
         self.container = container
         self.tags = tags
         self.workers_per_job = workers_per_job
@@ -100,11 +98,11 @@ class MahlerResourceManager(ResourceManager):
 
         self.stop = True
 
-            # Duplicate workers on all clusters
-            # Count co-workers and dedicated workers
+        # Duplicate workers on all clusters
+        # Count co-workers and dedicated workers
 
-            # lauch in parallel a resources manager for each cluster. They will duplicate
-            # everything.
+        # lauch in parallel a resources manager for each cluster. They will duplicate
+        # everything.
 
 
 class Scheduler(Process):
