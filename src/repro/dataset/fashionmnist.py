@@ -11,12 +11,14 @@ def build(data_path, mini=False):
     if mini:
         transformations.insert(0, transforms.Resize(7))
 
+    transform = transforms.Compose(transformations)
+
     train_dataset = datasets.FashionMNIST(
         data_path, train=True, download=True,
-        transform=transformations)
+        transform=transform)
 
     test_dataset = datasets.FashionMNIST(
         data_path, train=False, download=True,
-        transform=transformations)
+        transform=transform)
 
     return OrderedDict(dataset=torch.utils.data.ConcatDataset([train_dataset, test_dataset]))

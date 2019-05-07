@@ -176,27 +176,28 @@ def build(data_path, mini=False):
     normalize = transforms.Normalize(mean=[0.4194, 0.3898, 0.3454],
                                      std=[0.303, 0.291, 0.293])
 
-    transformations = transforms.Compose([
-            # data is stored as uint8
-            transforms.ToPILImage(),
-            transforms.CenterCrop(64),
-            # transforms.RandomCrop(64, padding=8),
-            # transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ])
+    transformations = [
+        # data is stored as uint8
+        transforms.ToPILImage(),
+        transforms.CenterCrop(64),
+        # transforms.RandomCrop(64, padding=8),
+        # transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize]
 
     if mini:
         transformations.insert(2, transforms.Resize(16))
 
+    transform = transforms.Compose(transformations)
+
     train_dataset = HDF5Dataset(
         os.path.join(data_path, TRAIN_FILENAME),
-        transformations,
+        transform,
         transforms.Lambda(lambda x: int(x)))
 
     test_dataset = HDF5Dataset(
         os.path.join(data_path, VAL_FILENAME),
-        transformations,
+        transform,
         transforms.Lambda(lambda x: int(x)))
 
     return OrderedDict(dataset=torch.utils.data.ConcatDataset([train_dataset, test_dataset]),

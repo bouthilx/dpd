@@ -5,12 +5,14 @@ from torchvision import datasets, transforms
 
 
 def build(data_path, mini=False):
-    transform = transforms.Compose(
-        [transforms.ToTensor(),
-         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    transformations = [
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
 
     if mini:
-        transform.insert(0, transforms.Resize(8))
+        transformations.insert(0, transforms.Resize(8))
+
+    transform = transforms.Compose(transformations)
 
     train_dataset = datasets.CIFAR100(
         root=data_path, train=True, download=True, transform=transform)
