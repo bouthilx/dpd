@@ -20,7 +20,7 @@ from repro.optimizer.base import build_optimizer
 from repro.utils.flatten import unflatten, merge_configs
 
 
-TIME_BUFFER = 60 * 5  # 5 minute
+TIME_BUFFER = 30
 
 
 def update(config, arguments):
@@ -140,7 +140,8 @@ def main(argv=None):
 
 
 def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
-          patience=None, compute_test_error_rates=False, loading_file_path=None):
+          patience=None, compute_test_error_rates=False, loading_file_path=None,
+          callback=None):
 
     # Checkpointing file path is named based on Mahler task ID
     checkpointing_file_path = get_checkpoint_file_path()
@@ -239,11 +240,19 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
                             all_stats=all_stats)
             engine.state.last_checkpoint = datetime.utcnow()
 
+        if callback:
+            callback(step=engine.state.epoch, objective=stats['valid']['error_rate'],
+                     finished=False)
+
     print("Training")
     trainer.run(dataset['train'], max_epochs=max_epochs)
 
     # Remove checkpoint to avoid cluttering the FS.
     clear_checkpoint(checkpointing_file_path)
+
+    if callback:
+        callback(step=max_epochs, objective=all_stats[-1]['valid']['error_rate'],
+                 finished=True)
 
     return {'best': best_stats, 'all': tuple(all_stats)}
 

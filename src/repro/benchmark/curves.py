@@ -25,14 +25,18 @@ class CurveBenchmark:
 
     @property
     def problems(self) -> Iterable[any]:
-        ProblemType = namedtuple('CurveProblem', ['tags', 'run', 'space'])
+        yield self.build()
+
+    def build(self):
+        ProblemType = namedtuple('CurveProblem', ['tags', 'run', 'space', 'config'])
 
         problem_config = dict(
+            config={},
             tags=create_tags(),
             run=curve_run,
             space=build_space())
 
-        yield ProblemType(**problem_config)
+        return ProblemType(**problem_config)
 
 
 def build_space():

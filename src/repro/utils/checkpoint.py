@@ -28,8 +28,12 @@ class CheckPointer(MonitorComponent):
         from repro.utils.resumable import state
 
         file_name = f'{self.archive_folder}/{name}'
-        with open(file_name, 'w') as f:
+        tmpfile = file_name + '.bck'
+        with open(tmpfile, 'w') as f:
             json.dump(state(obj), f, indent=2)
+        # TODO: For multiple files, we need to me sure the rename is atomic otherwise we may end up
+        # with files from different versions if the process stops during checkpointing.
+        os.rename(tmpfile, file_name)
 
     def _save_tracked_objects(self):
         for name, obj in self.tracked_objects:

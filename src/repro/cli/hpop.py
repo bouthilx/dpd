@@ -14,7 +14,7 @@ try:
 except ImportError:
     mahler = None
 
-from repro.benchmark.base import build_benchmark, build_benchmark_subparsers
+from repro.benchmark.base import build_benchmark, build_problem, build_benchmark_subparsers
 
 import repro.hpo.trial.base
 from repro.hpo.dispatcher.base import build_dispatcher
@@ -94,10 +94,11 @@ def main(argv=None):
         continue
 
     # TODO: Add these arguments only for Mahler backend
-    if 'mahler' in list(repro.hpo.trial.base.factories.keys()):
-        for register_subparser in execute_subparsers:
-            register_subparser.add_argument('--version', type=str)
-            register_subparser.add_argument('--container', type=str)
+    for register_subparser in execute_subparsers:
+        register_subparser.add_argument('--version', type=str)
+        register_subparser.add_argument('--container', type=str)
+        register_subparser.add_argument('--delay', action='store_true')
+
     #     register_subparser.add_argument(
     #         '--force', action='store_true', default=False,
     #         help='Register even if another similar task already exists')
@@ -122,7 +123,9 @@ def main(argv=None):
 
     benchmark = build_benchmark(name=options.benchmark, **vars(options))
 
-    if options.command == 'execute':
+    if options.command == 'execute' and options.delay:
+        return delay(benchmark, options)
+    elif options.command == 'execute':
         return execute(benchmark, options)
     elif options.command == 'visualize':
         visualize(benchmark, options)
@@ -151,10 +154,10 @@ def create_tags(version, dispatcher, configurator, seed, workers, problem):
     return [version] + env_tags + problem.tags
 
 
-def execute(benchmark, options):
-    logger.info(f'Benchmark: {benchmark.name}')
+# TODO: Turn this into a generator, on which we can either execute, or register
 
-    optim_data = nesteddict()
+def iterate(benchmark, options):
+
     problem_configurations = itertools.product(
         benchmark.problems, options.dispatchers,
         options.configurators, options.seeds, options.workers)
@@ -176,25 +179,53 @@ def execute(benchmark, options):
 
         tags = create_tags(options.version, dispatcher, configurator, seed, workers, problem)
 
-        trials, observations = execute_problem(
-            dispatcher_config, problem, options.max_trials,
-            workers, options.backend, options.container, tags, options.checkpoint,
-            not options.no_resume)
+        yield dict(dispatcher_config=dispatcher_config,
+                   problem=problem,
+                   max_trials=options.max_trials,
+                   workers=workers, backend=options.backend, container=options.container, tags=tags,
+                   checkpoint=options.checkpoint, resume=not options.no_resume)
+
+
+def execute(benchmark, options):
+    logger.info(f'Benchmark: {benchmark.name}')
+
+    optim_data = nesteddict()
+
+    for config in iterate(benchmark, options):
+        trials, observations = execute_problem(**config)
 
         results = process_trials(trials)
 
-        optim_data[','.join(problem.tags)][dispatcher][configurator][seed][workers] = results
+        print(results)
+        # optim_data[','.join(problem.tags)][dispatcher][configurator][seed][workers] = results
 
         # plot(trials, observations)
 
-    if options.save_out is not None:
+    if not delay and options.save_out is not None:
         data = json.dumps(optim_data, indent=4)
         json_file = open(options.save_out, 'w')
         json_file.write(data)
         json_file.write('\n')
         json_file.close()
-    else:
+    elif not delay:
         pprint.pprint(optim_data)
+
+
+def delay(benchmark, options):
+    assert options.backend == 'mahler'
+    assert mahler is not None
+
+    import repro.cli.hpop
+
+    operator = mahler.operator(resources={
+        'cpu': 1, 'mem': '1GB',
+        'usage': {'cpu': {'util': 20, 'memory': 2**30}}})
+    hpo_operator = operator(repro.cli.hpop.mahler_execute_problem)
+
+    mahler_client = mahler.Client()
+    for config in iterate(benchmark, options):
+        config['problem_config'] = dict(name=benchmark.name, config=config.pop('problem').config)
+        mahler_client.register(hpo_operator.delay(**config), tags=['master'] + config['tags'], container=options.container)
 
 
 def process_trials(trials):
@@ -221,6 +252,8 @@ def checkpoint_key(tags):
 
 def init_checkpoint(backend, manager, checkpoint_dir, resume, tags):
     if backend == 'builtin':
+        init_builtin_checkpoint(manager, checkpoint_dir, resume, tags)
+    elif backend == 'mahler':
         init_builtin_checkpoint(manager, checkpoint_dir, resume, tags)
     else:
         raise NotImplementedError
@@ -259,8 +292,35 @@ def init_builtin_checkpoint(manager, checkpoint_dir, resume, tags):
         )
 
 
-def execute_problem(dispatcher_config, problem, max_trials, workers, backend, container, tags,
-                    checkpoint, resume):
+# def init_mahler_checkpoint(manager, checkpoint_dir, tags):
+#     # Load all trials, reobserve, tada.
+#     mahler_client = mahler.Client()
+#     task_id = mahler.get_current_task_id()
+#     # TODO: Add projection to limit I/O
+#     for task_doc in mahler_client.find(tags=['worker', task_id]):
+#         hpo_trial = manager.trial_factory(task_doc['name'], manager.task, manager.manager.Queue())
+#         # use manager.trial_factory?
+#         manager.suspended_trials.add(hpo_trial)
+#         hpo.start()  # initiate metric transfert
+#         manager.dispatcher.observe(hpo_trial, trial.results)
+#
+#     manager.dispatcher.trial_count = len(trials)
+
+
+def mahler_execute_problem(dispatcher_config, problem_config, max_trials, workers, backend,
+                           container, tags, checkpoint, resume):
+
+    trials, observations = execute_problem(
+        dispatcher_config, build_problem(**problem_config), max_trials, workers, backend,
+        container, tags, checkpoint, resume)
+
+    results = process_trials(trials)
+
+    return dict(results=results)
+
+
+def execute_problem(dispatcher_config, problem, max_trials, workers, backend, container,
+                    tags, checkpoint, resume):
 
     backend_config = dict(tags=tags, container=container)
 

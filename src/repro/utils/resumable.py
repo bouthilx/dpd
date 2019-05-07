@@ -59,7 +59,7 @@ class ResumeTrialAspect(ResumableAspect):
 class ResumeManagerAspect(ResumableAspect):
     def state_attributes(self):
         return {'running_trials', 'suspended_trials', 'finished_trials',
-                'dispatcher', 'pending_params'}
+                'dispatcher', 'pending_params', 'resource_manager'}
 
     def resume(self, obj: 'HPOManager', state: Dict[str, any]):
         from repro.hpo.trial.builtin import Trial
@@ -71,6 +71,7 @@ class ResumeManagerAspect(ResumableAspect):
             return t
 
         obj.dispatcher = resume(obj.dispatcher, state['dispatcher'])
+        obj.resource_manager = resume(obj.resource_manager, state['resource_manager'])
 
         obj.running_trials = {make_trial(t, obj.manager.Queue()) for t in state['running_trials']}
         obj.suspended_trials = {make_trial(t, obj.manager.Queue())
@@ -105,6 +106,11 @@ class ResumeDispatcherAspect(ResumableAspect):
         return obj
 
 
+class ResumeResourceManagerAspect(ResumableAspect):
+    def state_attributes(self):
+        return {'id'}
+
+
 class ResumeNdArray(ResumableAspect):
     def state(self, obj) -> any:
         return obj.tolist()
@@ -124,6 +130,7 @@ def _register():
     if set not in _resumable_aspect:
         # TODO: Verify that different backends are supported properly
         from repro.hpo.trial.builtin import Trial
+        from repro.hpo.resource.builtin import ResourceManager
         from repro.hpo.dispatcher.dispatcher import HPODispatcher
         from repro.hpo.manager import HPOManager
 
@@ -131,6 +138,7 @@ def _register():
         ResumableAspect.register(ResumeList(), list)
         ResumableAspect.register(ResumeNdArray(), numpy.ndarray)
         ResumableAspect.register(ResumeDispatcherAspect(), HPODispatcher)
+        ResumableAspect.register(ResumeResourceManagerAspect(), ResourceManager)
         ResumableAspect.register(ResumeManagerAspect(), HPOManager)
         ResumableAspect.register(ResumeTrialAspect(), Trial)
 
