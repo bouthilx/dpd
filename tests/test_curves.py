@@ -15,16 +15,14 @@ def make_arguments(experience, workers=1, max_trials=10, more_args=None):
         more_args = []
 
     return [
-        '-v',
+        '-vv',
         'execute',
         '--save-out'       , f'{tmp_dir}/{experience}.json'] + more_args + [
         'curves',
-        '--problem-ids'     , '1',
-        '--dimensions'      , '2',
-        '--instances'       , '1',
-        '--dispatchers'     , 'stub',
         '--configurators'   , 'random_search',      # 'bayesopt',
-        '--config-dir-path' , 'configs/hpot/hpo/',
+        '--dispatcher'      , 'asha',
+        '--backend'         , 'builtin',
+        '--config-dir-path' , 'configs/hpop',
         '--max-trials'      , str(max_trials),
         '--workers'         , str(workers),
         '--seeds'           , '1', '2'

@@ -139,9 +139,12 @@ def load_config(config_dir_path, benchmark, task, hpo_role, name):
         benchmark=benchmark, task=task, role=hpo_role, name=name)
 
     if os.path.exists(config_path):
+        logger.info(f'Loading config {config_path}')
+
         with open(config_path, 'r') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
     else:
+        logger.info(f'config file not found')
         config = {'name': name}
 
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
