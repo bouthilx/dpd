@@ -3,24 +3,28 @@ import copy
 import functools
 import itertools
 import logging
+import pickle
 
 from typing import Iterable
 from orion.core.io.space_builder import Space, DimensionBuilder
-
-try:
-    import mahler.client as mahler
-except ImportError:
-    mahler = None
-
-try:
-    from repro.train import train
-except ImportError:
-    train = None
 
 from repro.utils.flatten import flatten, unflatten
 
 
 logger = logging.getLogger(__name__)
+
+
+try:
+    import mahler.client as mahler
+except ImportError as e:
+    logger.warning(f'Cannot import mahler: {e}')
+    mahler = None
+
+try:
+    from repro.train import train
+except ImportError as e:
+    logger.warning(f'Cannot import train: {e}')
+    train = None
 
 
 DATASETS = ['mnist', 'fashionmnist', 'cifar10', 'cifar100', 'tinyimagenet']
@@ -81,14 +85,27 @@ class MiniDLBenchmark:
                               optimizer=optimizer)
         benchmark_config.update(problem_config)
         benchmark_config['tags'] = create_tags(**problem_config)
-        benchmark_config['run'] = functools.partial(minidl_run, problem_config=problem_config)
+        benchmark_config['run'] = get_function(problem_config)
         benchmark_config['space'] = build_space(model, optimizer)
 
         return ProblemType(config=problem_config, **benchmark_config)
 
 
-def minidl_run(problem_config, callback=None, **params):
-    return train(callback=callback, **merge(expand_problem_config(**problem_config), params))
+def minidl_run(problem_config, model=None, optimizer=None, callback=None):
+    config = expand_problem_config(**problem_config)
+
+    params = dict()
+    if model:
+        params['model'] = model
+    if optimizer:
+        params['optimizer'] = optimizer
+
+    config = merge(config, params)
+
+    if callback and not hasattr(callback, '__call__'):
+        callback = pickle.loads(callback)
+
+    return train(callback=callback, **config)
 
 
 def expand_problem_config(dataset, dataset_fold, model, optimizer):
@@ -195,6 +212,18 @@ def merge(config, subconfig):
     flattened_config = copy.deepcopy(flatten(config))
     flattened_config.update(flatten(subconfig))
     return unflatten(flattened_config)
+
+
+def get_function(problem_config):
+    resources = {
+        'cpu': 6, 'mem': '10GB', 'gpu': 1,
+        'usage': {'cpu': {'util': 15, 'memory': 2 * 2 ** 30},
+                  'gpu': {'util': 10, 'memory': 2 ** 30}}}
+
+    if mahler:
+        return mahler.operator(resources=resources)(minidl_run, problem_config=problem_config)
+    else:
+        return functools.partial(minidl_run, problem_config=problem_config)
 
 
 if train is not None:

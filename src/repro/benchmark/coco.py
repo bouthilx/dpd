@@ -83,7 +83,7 @@ class COCOBenchmark:
         problem_config = dict(problem_id=problem_id, dimension=dimension, instance=instance)
         benchmark_config.update(problem_config)
         benchmark_config['tags'] = create_tags(**problem_config)
-        benchmark_config['run'] = functools.partial(coco_run, problem_config=problem_config)
+        benchmark_config['run'] = get_function(problem_config)
         benchmark_config['space'] = build_space(problem)
 
         return ProblemType(config=problem_config, **benchmark_config)
@@ -139,8 +139,11 @@ def build_space(problem, **space_config):
     return space
 
 
-# if mahler is not None:
-#    hpo_coco = mahler.operator(resources={'cpu': 2, 'mem': '20MB'}, resumable=False)(hpo_coco)
+def get_function(problem_config):
+    if mahler:
+        return mahler.operator(resources={'cpu': 2, 'mem': '20MB'})(coco_run, problem_config=problem_config)
+    else:
+        return functools.partial(coco_run, problem_config=problem_config)
 
 
 if cocoex is not None:

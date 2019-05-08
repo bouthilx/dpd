@@ -68,7 +68,9 @@ class HPODispatcher:
 
         params = self.params[trial_id] = self.suggest(seed)
 
-        return trial_id, params
+        # ugly hack to import state here and avoid circular imports...
+        from repro.utils.resumable import state
+        return trial_id, state(params)
 
     def suggest(self, seed) -> Dict[str, any]:
         return self.build_configurator().get_params(seed=seed)

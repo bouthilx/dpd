@@ -81,9 +81,6 @@ class HPOManager:
         # Additional class we should run
         self.components = []
 
-        if checkpoints:
-            self.enable_checkpoints()
-
         # List of ordered trials by creation time
         # This holds the object in themselves
         self.trials = []

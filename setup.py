@@ -21,7 +21,7 @@ setup(
     packages=find_namespace_packages('src'),
     install_requires=[
         'orion.core',
-        'orion.algo.skopt', 'tqdm'],
+        'orion.algo.skopt', 'tqdm', 'dataclasses'],
     extras_require = {
         'coco': [
             'cocoex'],
