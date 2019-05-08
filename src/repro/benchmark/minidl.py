@@ -173,7 +173,7 @@ OPTIMIZER_SPACES = {
 
 def create_tags(dataset, dataset_fold, model, optimizer):
     tags = [
-        'minidl',
+        'b-minidl',
         f'd-{dataset}',
         f'f-{dataset_fold}',
         f'm-{model}',

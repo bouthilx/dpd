@@ -28,9 +28,9 @@ DATASET_FOLDS = list(range(1, 11))
 MODELS = (
     ['lenet'] +
     [f'vgg{i}' for i in [11, 13, 16, 19]] +
-    [f'resnet{i}' for i in [18, 32, 51, 101]] +
-    [f'preactresnet{i}' for i in [18, 32, 51, 101]] +
-    [f'densenet{i}' for i in [121, 201]] +
+    [f'resnet{i}' for i in [18, 34, 50, 101]] +
+    [f'preactresnet{i}' for i in [18, 34, 50, 101]] +
+    [f'densenet{i}' for i in [121, 161, 169, 201]] +
     ['mobilenetv2'])
 OPTIMIZERS = ['sgd', 'adam']
 
@@ -87,13 +87,13 @@ class VisionDLBenchmark:
                               optimizer=optimizer)
         benchmark_config.update(problem_config)
         benchmark_config['tags'] = create_tags(**problem_config)
-        benchmark_config['run'] = functools.partial(minidl_run, problem_config=problem_config)
+        benchmark_config['run'] = functools.partial(visiondl_run, problem_config=problem_config)
         benchmark_config['space'] = build_space(model, optimizer)
 
         return ProblemType(config=problem_config, **benchmark_config)
 
 
-def minidl_run(problem_config, callback=None, **params):
+def visiondl_run(problem_config, callback=None, **params):
     return train(callback=callback, **merge(expand_problem_config(**problem_config), params))
 
 
@@ -102,7 +102,6 @@ def expand_problem_config(dataset, dataset_fold, model, optimizer):
         'data': {
             'name': dataset,
             'seed': (0, dataset_fold),
-            'mini': True,
             'batch_size': 128},
         'model': {
             'name': model},
@@ -141,7 +140,7 @@ OPTIMIZER_SPACES = {
 
 def create_tags(dataset, dataset_fold, model, optimizer):
     tags = [
-        'minidl',
+        'b-visiondl',
         f'd-{dataset}',
         f'f-{dataset_fold}',
         f'm-{model}',
