@@ -1,7 +1,7 @@
 from multiprocessing import Process
 from repro.cli.hpop import main
-from repro.utils.tests.compare import compare_dict
 from tempfile import mkdtemp
+from repro.utils.tests.compare import compare_dict
 import json
 import math
 import time
@@ -15,16 +15,14 @@ def make_arguments(experience, workers=1, max_trials=10, more_args=None):
         more_args = []
 
     return [
-        '-v',
+        '-vv',
         'execute',
         '--save-out'       , f'{tmp_dir}/{experience}.json'] + more_args + [
-        'coco',
-        '--problem-ids'     , '1',
-        '--dimensions'      , '2',
-        '--instances'       , '1',
-        '--dispatchers'     , 'stub',
+        'curves',
         '--configurators'   , 'random_search',      # 'bayesopt',
-        '--config-dir-path' , 'configs/hpot/hpo/',
+        '--dispatcher'      , 'asha',
+        '--backend'         , 'builtin',
+        '--config-dir-path' , 'configs/hpop',
         '--max-trials'      , str(max_trials),
         '--workers'         , str(workers),
         '--seeds'           , '1', '2'
@@ -33,50 +31,6 @@ def make_arguments(experience, workers=1, max_trials=10, more_args=None):
 
 def get_results(file_name):
     return json.load(open(file_name, 'r'))
-
-
-def simple_repro_test(workers=1):
-    objectives = []
-    simple_repro_test_arguments = make_arguments(
-        'simple_repro_test',
-        workers=workers
-    )
-
-    for i in range(0, 10):
-        try:
-            run = Process(target=main, args=(simple_repro_test_arguments,))
-            run.start()
-            run.join()
-
-            results = get_results(f'{tmp_dir}/simple_repro_test.json')
-
-            #                               I am not lost are you ?
-            trials = results['coco,f001,d002,i01']['stub']['random_search']['2']
-            mx = 0
-            last_objective = ''
-            for k, result in trials.items():
-                if mx < int(k):
-                    mx = int(k)
-                    last_objective = result
-
-            last_objective = last_objective[-1]['objective']
-            objectives.append(last_objective)
-        except Exception as e:
-            print(json.dumps(results, indent=2))
-            raise e
-
-    target = objectives[0]
-    average = (sum(objectives) / len(objectives))
-
-    print('-' * 80)
-    print(f'{target} =? {average}')
-    assert math.fabs(average - target) < 1e06
-
-
-def simple_repro_test_all():
-    simple_repro_test(workers=1)
-    simple_repro_test(workers=2)
-    simple_repro_test(workers=4)
 
 
 def resume_test():
@@ -126,7 +80,6 @@ def resume_test():
 
     print('Compare')
     print('-' * 80)
-    #print(target_results)
 
     experiements = target_results['index'].keys()
     results1 = target_results['results']

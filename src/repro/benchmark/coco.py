@@ -5,6 +5,7 @@ import logging
 
 from typing import Iterable
 from orion.core.io.space_builder import Space, DimensionBuilder
+from repro.utils.chrono import Chrono
 
 try:
     import cocoex
@@ -89,11 +90,12 @@ class COCOBenchmark:
 
 
 def coco_run(problem_config, callback=None, **params):
-    problem = build_problem(**problem_config)
-    objective = problem([params[get_dim_name(dim)] for dim in range(problem.dimension)])
+    with Chrono() as t:
+        problem = build_problem(**problem_config)
+        objective = problem([params[get_dim_name(dim)] for dim in range(problem.dimension)])
 
-    if callback:
-        callback(step=1, objective=objective, finished=True)
+        if callback:
+            callback(step=1, objective=objective, finished=True, exec_time=t.val)
 
 
 def create_tags(problem_id, dimension, instance):

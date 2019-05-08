@@ -53,13 +53,13 @@ class ResumableAspect:
 
 class ResumeTrialAspect(ResumableAspect):
     def state_attributes(self):
-        return {'id', 'params', 'latest_results'}
+        return {'id', 'params', 'latest_results', 'timestamps', 'results'}
 
 
 class ResumeManagerAspect(ResumableAspect):
     def state_attributes(self):
         return {'running_trials', 'suspended_trials', 'finished_trials',
-                'dispatcher', 'pending_params', 'resource_manager'}
+                'dispatcher', 'pending_params', 'resource_manager', 'trials'}
 
     def resume(self, obj: 'HPOManager', state: Dict[str, any]):
         from repro.hpo.trial.builtin import Trial
@@ -73,19 +73,30 @@ class ResumeManagerAspect(ResumableAspect):
         obj.dispatcher = resume(obj.dispatcher, state['dispatcher'])
         obj.resource_manager = resume(obj.resource_manager, state['resource_manager'])
 
-        obj.running_trials = {make_trial(t, obj.manager.Queue()) for t in state['running_trials']}
-        obj.suspended_trials = {make_trial(t, obj.manager.Queue())
-                                for t in state['suspended_trials']}
-        obj.finished_trials = {make_trial(t, None) for t in state['finished_trials']}
+        trials = obj.trials
+        obj.trials = []
+        for trial_state in trials:
+            obj._insert_trial(make_trial(trial_state, obj.manager.Queue()))
 
-        for trial in obj.running_trials:
+        for trial_id in obj.running_trials:
+            trial = obj.get_trial(trial_id)
             trial.start()
-            obj.running_trials.add(trial)
+            obj.running_trials.add(trial_id)
 
         # Compute the trial_count remaining
         obj.trial_count = max(len(obj.finished_trials) + len(obj.suspended_trials) + len(obj.running_trials) - 1, 0)
         obj.dispatcher.trial_count = obj.trial_count
         return obj
+
+
+def _to_defaultdict(diction):
+    default = defaultdict(dict)
+
+    for hex, steps in diction.items():
+        for k, v in steps.items():
+            default[hex][int(k)] = v
+
+    return default
 
 
 class ResumeDispatcherAspect(ResumableAspect):
@@ -95,12 +106,8 @@ class ResumeDispatcherAspect(ResumableAspect):
     def resume(self, obj: 'HPODispatcher', state: Dict[str, any]):
         super(ResumeDispatcherAspect, self).resume(obj, state)
         # self.observations: Dict[str, Dict[str, int]]
-        obs = obj.observations
-        obj.observations = defaultdict(dict)
 
-        for hex, steps in obs.items():
-            for k, objective in steps.items():
-                obj.observations[hex][int(k)] = objective
+        obj.observations = _to_defaultdict(obj.observations)
 
         obj.finished = set(obj.finished)
         return obj

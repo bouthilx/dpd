@@ -1,4 +1,5 @@
 import copy
+import datetime
 from collections import defaultdict
 import logging
 import uuid
@@ -51,7 +52,11 @@ class HPODispatcher:
             worst_objectives = 99999
 
         self.buffered_observations = []
-        self._observe(trial_id=kwargs['trial_id'], params=None, step=-1, objective=worst_objectives)
+        self._observe(
+            trial_id=kwargs['trial_id'],
+            params=None, step=-1,
+            objective=worst_objectives
+        )
 
         self.trial_count += 1
         return kwargs
