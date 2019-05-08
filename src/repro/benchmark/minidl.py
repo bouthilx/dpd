@@ -88,9 +88,16 @@ class MiniDLBenchmark:
         return ProblemType(config=problem_config, **benchmark_config)
 
 
-def minidl_run(problem_config, model, optimizer, callback=None):
+def minidl_run(problem_config, model=None, optimizer=None, callback=None):
     config = expand_problem_config(**problem_config)
-    config = merge(config, dict(model=model, optimizer=optimizer))
+
+    params = dict()
+    if model:
+        params['model'] = model
+    if optimizer:
+        params['optimizer'] = optimizer
+
+    config = merge(config, params)
 
     if callback and not hasattr(callback, '__call__'):
         callback = pickle.loads(callback)
