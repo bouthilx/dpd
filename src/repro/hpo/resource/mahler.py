@@ -69,7 +69,7 @@ class MahlerResourceManager(ResourceManager):
             host.setdefault('max_workers', config.max_workers)
             host.setdefault('submission_root', config.submission_root)
 
-        self.user = getpass.getuser()
+        self.user = config.user
 
         # TODO: Support cpu job only. Force gpu resource until then.
         self.resources['gpu'] = 1
