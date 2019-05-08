@@ -1,4 +1,3 @@
-import getpass
 import logging
 import os
 import pprint
@@ -144,7 +143,7 @@ class Scheduler(Process):
     def status(self):
         """
         """
-        command = 'squeue -r -o "%t %j" -u {user}'.format(user=getpass.getuser())
+        command = 'squeue -r -o "%t %j" -u {user}'.format(user=self.user)
         workers = {}
         logger.debug(f'squeue on {self.host}')
         out = self.connection.run(command, hide=True, warn=True)
