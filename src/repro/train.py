@@ -16,7 +16,6 @@ import torch.optim
 import yaml
 
 from repro.dataset.base import build_dataset
-from repro.hpo.dpd import DynamicPercentileDispatcher
 from repro.log import Logger
 from repro.model.base import (
     build_model, get_checkpoint_file_path, load_checkpoint, save_checkpoint, clear_checkpoint)
@@ -212,9 +211,6 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
           patience=None, stopping_rule=None,
           compute_test_error_rates=False, loading_file_path=None, callback=None):
 
-    if stopping_rule is None:
-        stopping_rule = {}
-
     # Checkpointing file path is named based on Mahler task ID
     checkpointing_file_path = get_checkpoint_file_path()
 
@@ -254,10 +250,6 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
     print('    Evaluator loop')
     evaluators, early_stopping = build_evaluators(trainer, model, device, patience, compute_test_error_rates)
-
-    print('    Stopping rule')
-    if stopping_rule:
-        stopping_rule = DynamicPercentileDispatcher(**stopping_rule)
 
     print('    Set timer events')
     timer.attach(trainer, start=Events.STARTED, step=Events.EPOCH_COMPLETED)
@@ -308,9 +300,6 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
             engine.state.output = 0.0
             # trainer_save_checkpoint(engine)
 
-        if stopping_rule:
-            stopping_rule.signal_resume(engine.state.epoch)
-
     @trainer.on(Events.EPOCH_STARTED)
     def trainer_seeding(engine):
         print(seeds['sampler'] + engine.state.epoch)
@@ -333,11 +322,6 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
             stats[name] = dict(
                 loss=metrics['nll'],
                 error_rate= metrics['error_rate'])
-
-            if name == 'valid' and stopping_rule:
-                print('Signal stop')
-                print(stats)
-                stopping_rule.signal_step(stats)
 
         print('Early stopping')
         print('{}   {} < {}'.format(early_stopping.best_score, early_stopping.counter,
@@ -374,21 +358,6 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
         metric_logger.add_metric(stats)
 
-        if stopping_rule:
-            stopping_timer.reset()
-            try:
-                stopping_rule.verify(engine.state.epoch)
-                print('Stopping synchronisation time {:>8.3f}'.format(stopping_timer.value()))
-            except Exception:
-                print('Stopping synchronisation time {:>8.3f}'.format(stopping_timer.value()))
-                print('Checkpointing before stopping at epoch {}'.format(engine.state.epoch))
-                save_checkpoint(checkpointing_file_path,
-                                model, optimizer, lr_scheduler,
-                                epoch=engine.state.epoch,
-                                iteration=engine.state.iteration,
-                                all_stats=all_stats)
-                raise
-
         all_stats.append(stats)
 
         # TODO: Checkpoint lr_scheduler as well
@@ -407,9 +376,6 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
 
     print("Training")
     trainer.run(dataset['train'], max_epochs=max_epochs)
-
-    if stopping_rule:
-        stopping_rule.signal_completion(all_stats[-1]['epoch'])
 
     metric_logger.close()
 
