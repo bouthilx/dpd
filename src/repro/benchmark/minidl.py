@@ -8,20 +8,23 @@ import pickle
 from typing import Iterable
 from orion.core.io.space_builder import Space, DimensionBuilder
 
-try:
-    import mahler.client as mahler
-except ImportError:
-    mahler = None
-
-try:
-    from repro.train import train
-except ImportError:
-    train = None
-
 from repro.utils.flatten import flatten, unflatten
 
 
 logger = logging.getLogger(__name__)
+
+
+try:
+    import mahler.client as mahler
+except ImportError as e:
+    logger.warning(f'Cannot import mahler: {e}')
+    mahler = None
+
+try:
+    from repro.train import train
+except ImportError as e:
+    logger.warning(f'Cannot import train: {e}')
+    train = None
 
 
 DATASETS = ['mnist', 'fashionmnist', 'cifar10', 'cifar100', 'tinyimagenet']
