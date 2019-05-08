@@ -2,7 +2,7 @@ from queue import Empty, Queue
 from typing import Callable
 import itertools
 import logging
-
+import datetime
 from multiprocessing import Manager, Process
 
 from repro.utils.checkpoint import CheckPointer
@@ -80,8 +80,20 @@ class HPOManager:
         self.trial_count = 0
         # Additional class we should run
         self.components = []
+
         if checkpoints:
             self.enable_checkpoints()
+
+        # List of ordered trials by creation time
+        # This holds the object in themselves
+        self.trials = []
+        self.request_timestamps = {}
+        # Used to do quick lookups in self.trials
+        self.trial_lookup = {}
+
+    def _insert_trial(self, trial):
+        self.trials.append(trial)
+        self.trial_lookup[trial.id] = trial
 
     def insert_component(self, obj):
         self.components.append(obj)
@@ -90,10 +102,6 @@ class HPOManager:
         chk = CheckPointer(**kwargs)
         chk.checkpoint_this(self, name=name)
         self.insert_component(chk)
-
-    @property
-    def trials(self):
-        return itertools.chain(self.suspended_trials, self.running_trials, self.finished_trials)
 
     def run(self):
         self.resource_manager.start()
@@ -134,8 +142,8 @@ class HPOManager:
 
                 if any_change:
                     logger.debug(f'{bcolors.OKGREEN}running{bcolors.ENDC}:{len(self.running_trials)} '
-                                f'{bcolors.WARNING}suspended{bcolors.ENDC}:{len(self.suspended_trials)} '
-                                f'{bcolors.OKBLUE}completed{bcolors.ENDC}:{len(self.finished_trials)}')
+                                 f'{bcolors.WARNING}suspended{bcolors.ENDC}:{len(self.suspended_trials)} '
+                                 f'{bcolors.OKBLUE}completed{bcolors.ENDC}:{len(self.finished_trials)}')
 
             logger.debug('Waiting for running trials to complete.')
             # TODO: Shouldn't we suspend them?
@@ -146,6 +154,9 @@ class HPOManager:
 
         logger.debug('HPO completed')
 
+    def get_trial(self, trial_id):
+        return self.trial_lookup[trial_id]
+
     def _shutdown(self, gracefully=True) -> None:
         # Close self.param_service
         self.param_service.terminate()
@@ -154,18 +165,21 @@ class HPOManager:
             while self.running_trials:
                 if self.receive_and_suspend():
                     logger.debug(f'{bcolors.OKGREEN}running{bcolors.ENDC}:{len(self.running_trials)} '
-                                f'{bcolors.WARNING}suspended{bcolors.ENDC}:{len(self.suspended_trials)} '
-                                f'{bcolors.OKBLUE}completed{bcolors.ENDC}:{len(self.finished_trials)}')
+                                 f'{bcolors.WARNING}suspended{bcolors.ENDC}:{len(self.suspended_trials)} '
+                                 f'{bcolors.OKBLUE}completed{bcolors.ENDC}:{len(self.finished_trials)}')
 
-        for trial in self.running_trials:
-            trial.stop()
+        for trial_id in self.running_trials:
+            self.get_trial(trial_id).stop()
 
         self.manager.shutdown()
         self.resource_manager.terminate()
 
     def _queue_suggest(self) -> None:
         """ dummy function used to queue an async call to self.suggest """
-        self.param_input_queue.put(self.dispatcher.make_suggest_parameters())
+        args = self.dispatcher.make_suggest_parameters()
+        trial_id = args['trial_id']
+        self.request_timestamps[trial_id] = str(datetime.datetime.utcnow())
+        self.param_input_queue.put(args)
 
     def start_new_trials(self) -> int:
         """ check if some params are available in the queue, and create a trial if so.
@@ -176,14 +190,24 @@ class HPOManager:
         while True:
             try:
                 trial_id, params = self.param_output_queue.get(True, timeout=0.01)
+                suggest_timestamp = str(datetime.datetime.utcnow())
                 self.pending_params -= 1
                 started += 1
 
-                trial = self.trial_factory(id=trial_id, task=self.task, params=params,
-                                           queue=self.manager.Queue())
+                trial = self.trial_factory(id=trial_id, task=self.task, params=params, queue=self.manager.Queue())
+                self._insert_trial(trial)
+
+                request_time = self.request_timestamps.pop(trial_id, None)
+                if request_time is None:
+                    logger.error('Request timestamp is missing!')
+
+                trial.insert_timestamp('request', request_time)
+                trial.insert_timestamp('suggest', suggest_timestamp)
+                trial.insert_timestamp('creation')
+
                 trial.start()
                 logger.debug(f'{trial.id} {bcolors.OKGREEN}started{bcolors.ENDC}')
-                self.running_trials.add(trial)
+                self.running_trials.add(trial_id)
 
             except Empty:
                 return started
@@ -198,43 +222,51 @@ class HPOManager:
         is_finished = set()
         lost = set()
 
-        for trial in self.running_trials:
+        for trial_id in self.running_trials:
+            trial = self.get_trial(trial_id)
             result = trial.receive()
 
             if result is not None:
+                for r in result:
+                    trial.insert_timestamp('observe', r.get('callback_timestamp'))
+                    trial.results.append(r)
+
                 self.dispatcher.observe(trial, result)
 
-            if trial.is_alive() and trial not in self.to_be_suspended_trials and self.dispatcher.should_suspend(trial.id):
+            if trial.is_alive() and trial_id not in self.to_be_suspended_trials and self.dispatcher.should_suspend(trial_id):
                 logger.debug(f'{trial.id} {bcolors.WARNING}suspending{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
                 trial.stop()
-                to_be_suspended.add(trial)
+                to_be_suspended.add(trial_id)
 
             elif trial.has_finished():
                 logger.debug(f'{trial.id} {bcolors.OKBLUE}completed{bcolors.ENDC}{trial.get_last_results()[-1]["objective"]}')
-                is_finished.add(trial)
+                is_finished.add(trial_id)
+                trial.insert_timestamp('finished')
 
             # Trial was lost
-            elif not trial.is_alive() and trial not in self.to_be_suspended_trials:
+            elif not trial.is_alive() and trial_id not in self.to_be_suspended_trials:
                 logger.debug(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
-                to_be_suspended.add(trial)
+                to_be_suspended.add(trial_id)
 
-        for trial in is_finished:
-            self.finished_trials.add(trial)
+        for trial_id in is_finished:
+            self.finished_trials.add(trial_id)
             # Maybe it was supposed to be suspended but completed before it could suspend.
-            self.to_be_suspended_trials.discard(trial)
-            self.running_trials.discard(trial)
+            self.to_be_suspended_trials.discard(trial_id)
+            self.running_trials.discard(trial_id)
 
         # NOTE: The trial will be detected as stopped later on anyway
         #       This delay is accorded so that high latency trials have a chance 
         #       to suspend properly
-        for trial in (to_be_suspended | self.to_be_suspended_trials):
+        for trial_id in (to_be_suspended | self.to_be_suspended_trials):
+            trial = self.get_trial(trial_id)
+
             if not trial.is_alive():
                 logger.debug(f'{trial.id} {bcolors.WARNING}suspended{bcolors.ENDC}')
-                self.suspended_trials.add(trial)
-                self.to_be_suspended_trials.discard(trial)
-                self.running_trials.discard(trial)
+                self.suspended_trials.add(trial_id)
+                self.to_be_suspended_trials.discard(trial_id)
+                self.running_trials.discard(trial_id)
             else:
-                self.to_be_suspended_trials.add(trial)
+                self.to_be_suspended_trials.add(trial_id)
 
         return len(to_be_suspended) + len(is_finished)
 
@@ -246,24 +278,27 @@ class HPOManager:
         to_be_resumed = set()
         is_finished = set()
 
-        for trial in self.suspended_trials:
+        for trial_id in self.suspended_trials:
+            trial = self.get_trial(trial_id)
+
             if trial.has_finished():
-                is_finished.add(trial)
+                is_finished.add(trial_id)
                 
-            elif self.dispatcher.should_resume(trial.id):
-                to_be_resumed.add(trial)
+            elif self.dispatcher.should_resume(trial_id):
+                to_be_resumed.add(trial_id)
 
                 if len(to_be_resumed) == count:
                     break
 
-        for trial in to_be_resumed:
-            self.suspended_trials.discard(trial)
+        for trial_id in to_be_resumed:
+            trial = self.get_trial(trial_id)
+            self.suspended_trials.discard(trial_id)
             trial.start()
             logger.debug(f'{trial.id} {bcolors.OKGREEN}resumed{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
-            self.running_trials.add(trial)
+            self.running_trials.add(trial_id)
 
-        for trial in is_finished:
-            self.finished_trials.add(trial)
-            self.suspended_trials.discard(trial)
+        for trial_id in is_finished:
+            self.finished_trials.add(trial_id)
+            self.suspended_trials.discard(trial_id)
 
         return len(to_be_resumed)

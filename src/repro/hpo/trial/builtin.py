@@ -1,15 +1,13 @@
 import copy
 import datetime
 import functools
-import signal
-import time
-import uuid
 from queue import Empty as EmptyQueueException
 from multiprocessing import Queue, Process
 from typing import Optional, Callable, Dict, Tuple
 
 
 def callback(queue, **kwargs):
+    kwargs['callback_timestamp'] = str(datetime.datetime.utcnow())
     queue.put(kwargs)
 
 
@@ -26,7 +24,8 @@ class Trial:
         self.kwargs['callback'] = functools.partial(callback, queue=queue)
         self.process: Optional[Process] = None
         self.latest_results = None
-        self.creation_time = datetime.datetime.utcnow()
+        self.timestamps = []
+        self.results = []
 
     def is_alive(self) -> bool:
         return self.process and self.process.is_alive()
@@ -42,11 +41,13 @@ class Trial:
         if not self.is_alive():
             self.process = Process(target=self.task, kwargs=self.kwargs)
             self.process.start()
+            self.insert_timestamp('start')
 
     def stop(self, safe=False) -> None:
         """ stop the trial in progress if safe is true it will wait until the process exit """
         if self.process:
             self.process.terminate()
+            self.insert_timestamp('stop')
             if safe:
                 self.process.join()
             self.process = None
@@ -68,6 +69,19 @@ class Trial:
 
                 self.latest_results = tuple(obs)
                 return tuple(obs)
+
+    def insert_timestamp(self, name, time=None):
+        if time is None:
+            time = str(datetime.datetime.utcnow())
+        self.timestamps.append((name, time))
+
+    def to_dict(self):
+        return {
+            'results': self.results,
+            'timestamps': self.timestamps,
+            'params': self.params,
+            'id': self.id
+        }
 
 
 def build(id: str, task: Callable[[Dict[str, any]], None], params: Dict[str, any], queue: Queue,

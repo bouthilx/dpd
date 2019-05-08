@@ -6,8 +6,9 @@ import logging
 import os
 import pprint
 import json
-
 import yaml
+
+from typing import List
 
 try:
     import mahler.client as mahler
@@ -186,28 +187,41 @@ def iterate(benchmark, options):
                    checkpoint=options.checkpoint, resume=not options.no_resume)
 
 
+def checkpoint_key(tags):
+    tags = list(tags)
+    tags.sort()
+
+    import hashlib
+    sh = hashlib.sha256()
+    for tag in tags:
+        sh.update(tag.encode('utf-8'))
+
+    return sh.hexdigest()[:15]
+
+
 def execute(benchmark, options):
     logger.info(f'Benchmark: {benchmark.name}')
 
     optim_data = nesteddict()
 
     for config in iterate(benchmark, options):
-        trials, observations = execute_problem(**config)
+        results = execute_problem(**config)
 
-        results = process_trials(trials)
+        # print(results)
+        tags = config['tags']
+        problem_key = checkpoint_key(tags)
+        # results = process_trials(trials)
 
-        print(results)
-        # optim_data[','.join(problem.tags)][dispatcher][configurator][seed][workers] = results
+        optim_data['index'][problem_key] = tags
+        optim_data['results'][problem_key] = results
 
-        # plot(trials, observations)
-
-    if not delay and options.save_out is not None:
+    if not options.delay and options.save_out is not None:
         data = json.dumps(optim_data, indent=4)
         json_file = open(options.save_out, 'w')
         json_file.write(data)
         json_file.write('\n')
         json_file.close()
-    elif not delay:
+    elif not options.delay:
         pprint.pprint(optim_data)
 
 
@@ -226,28 +240,6 @@ def delay(benchmark, options):
     for config in iterate(benchmark, options):
         config['problem_config'] = dict(name=benchmark.name, config=config.pop('problem').config)
         mahler_client.register(hpo_operator.delay(**config), tags=['master'] + config['tags'], container=options.container)
-
-
-def process_trials(trials):
-    results = []
-    for trial in sorted(trials, key=lambda trial: trial.creation_time):
-        result = trial.get_last_results()
-        if result:
-            results.append({'params': trial.params, 'objective': result[-1]['objective']})
-
-    return results
-
-
-def checkpoint_key(tags):
-    tags = list(tags)
-    tags.sort()
-
-    import hashlib
-    sh = hashlib.sha256()
-    for tag in tags:
-        sh.update(tag.encode('utf-8'))
-
-    return sh.hexdigest()[:15]
 
 
 def init_checkpoint(backend, manager, checkpoint_dir, resume, tags):
@@ -310,11 +302,9 @@ def init_builtin_checkpoint(manager, checkpoint_dir, resume, tags):
 def mahler_execute_problem(dispatcher_config, problem_config, max_trials, workers, backend,
                            container, tags, checkpoint, resume):
 
-    trials, observations = execute_problem(
+    results = execute_problem(
         dispatcher_config, build_problem(**problem_config), max_trials, workers, backend,
         container, tags, checkpoint, resume)
-
-    results = process_trials(trials)
 
     return dict(results=results)
 
@@ -338,7 +328,7 @@ def execute_problem(dispatcher_config, problem, max_trials, workers, backend, co
     manager.run()
     resource_manager.terminate()
 
-    return list(manager.trials), dispatcher.observations
+    return [trial.to_dict() for trial in manager.trials]
 
 
 def plot(trials, observations):
