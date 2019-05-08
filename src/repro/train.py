@@ -402,7 +402,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
             engine.state.last_checkpoint = datetime.utcnow()
 
         if callback:
-            callback(step=engine.state.epoch, objective=stats['valid']['error_rate'],
+            callback(step=engine.state.epoch, objective=stats['valid']['error_rate']['mean'],
                      finished=False)
 
     print("Training")
@@ -417,7 +417,7 @@ def train(data, model, optimizer, model_seed=1, sampler_seed=1, max_epochs=120,
     clear_checkpoint(checkpointing_file_path)
 
     if callback:
-        callback(step=max_epochs, objective=all_stats[-1]['valid']['error_rate'],
+        callback(step=max_epochs, objective=all_stats[-1]['valid']['error_rate']['mean'],
                  finished=True)
 
     return {'best': best_stats, 'all': tuple(all_stats)}
