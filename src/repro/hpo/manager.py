@@ -80,8 +80,6 @@ class HPOManager:
         self.trial_count = 0
         # Additional class we should run
         self.components = []
-        if checkpoints:
-            self.enable_checkpoints()
 
     def insert_component(self, obj):
         self.components.append(obj)

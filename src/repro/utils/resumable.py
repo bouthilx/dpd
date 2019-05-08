@@ -106,6 +106,20 @@ class ResumeDispatcherAspect(ResumableAspect):
         return obj
 
 
+class ResumeASHAAspect(ResumeDispatcherAspect):
+    def state_attributes(self):
+        return super(ResumeASHAAspect, self).state_attributes() & {'rungs'}
+
+    def resume(self, obj: 'ASHA', state: Dict[str, any]):
+        super(ResumeASHAAspect, self).resume(obj, state)
+        # self.observations: Dict[str, Dict[str, int]]
+
+        obj.rungs = defaultdict(set)
+        obj.rungs.update({k: set(v) for k, v in state['rungs'].items()})
+
+        return obj
+
+
 class ResumeResourceManagerAspect(ResumableAspect):
     def state_attributes(self):
         return {'id'}
@@ -142,6 +156,7 @@ def _register():
         from repro.hpo.trial.builtin import Trial
         from repro.hpo.resource.builtin import ResourceManager
         from repro.hpo.dispatcher.dispatcher import HPODispatcher
+        from repro.hpo.dispatcher.asha import ASHA
         from repro.hpo.manager import HPOManager
 
         ResumableAspect.register(ResumeSet(), set)
@@ -151,6 +166,7 @@ def _register():
         ResumableAspect.register(ResumeNpInt(), numpy.int64)
         ResumableAspect.register(ResumeNdArray(), numpy.ndarray)
         ResumableAspect.register(ResumeDispatcherAspect(), HPODispatcher)
+        ResumableAspect.register(ResumeASHAAspect(), ASHA)
         ResumableAspect.register(ResumeResourceManagerAspect(), ResourceManager)
         ResumableAspect.register(ResumeManagerAspect(), HPOManager)
         ResumableAspect.register(ResumeTrialAspect(), Trial)
