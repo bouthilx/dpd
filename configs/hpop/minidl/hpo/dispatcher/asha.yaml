@@ -1,0 +1,4 @@
+name: 'asha'
+fidelities: [12, 25, 50, 100]
+reduction_factor: 4
+max_resource: 1
