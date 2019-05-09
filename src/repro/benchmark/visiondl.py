@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 DATASETS = ['mnist', 'fashionmnist', 'svhn', 'cifar10', 'cifar100', 'tinyimagenet']
 DATASET_FOLDS = list(range(1, 11))
+INITS = list(range(1, 11))
 MODELS = (
     ['lenet'] +
     [f'vgg{i}' for i in [11, 13, 16, 19]] +
@@ -38,13 +39,14 @@ OPTIMIZERS = ['sgd', 'adam']
 
 class VisionDLBenchmark:
     name = 'visiondl'
-    attributes = ['datasets', 'dataset_folds', 'models', 'optimizers']
+    attributes = ['datasets', 'dataset_folds', 'models', 'optimizers', 'inits']
 
-    def __init__(self, datasets=None, dataset_folds=None, models=None, optimizers=None):
+    def __init__(self, datasets=None, dataset_folds=None, models=None, optimizers=None, inits=None):
         self.datasets = datasets if datasets else DATASETS
         self.dataset_folds = dataset_folds if dataset_folds else DATASET_FOLDS
         self.models = models if models else MODELS
         self.optimizers = optimizers if optimizers else OPTIMIZERS
+        self.inits = inits if inits else INITS
 
     def add_subparser(self, parser):
         benchmark_parser = parser.add_parser(self.name)
@@ -68,7 +70,7 @@ class VisionDLBenchmark:
 
     @property
     def problems(self) -> Iterable[any]:
-        prod_attributes = ['datasets', 'dataset_folds', 'models', 'optimizers']
+        prod_attributes = ['datasets', 'dataset_folds', 'models', 'optimizers', 'inits']
 
         configs = itertools.product(*[getattr(self, name) for name in prod_attributes])
 
@@ -81,11 +83,12 @@ class VisionDLBenchmark:
         fixed_attributes = []
         benchmark_config = dict(getattr(self, name) for name in fixed_attributes)
         ProblemType = namedtuple('VisionDLProblem', ['dataset', 'dataset_fold', 'model',
-                                                     'optimizer', 'tags', 'run', 'space', 'config'])
+                                                     'optimizer', 'init', 'tags', 'run', 'space',
+                                                     'config'])
 
         # TODO: inspect build_problem arguments to automatically map with problem_config
         problem_config = dict(dataset=dataset, dataset_fold=dataset_fold, model=model,
-                              optimizer=optimizer)
+                              optimizer=optimizer, init=init)
         benchmark_config.update(problem_config)
         benchmark_config['tags'] = create_tags(**problem_config)
         benchmark_config['run'] = get_function(problem_config)
@@ -111,7 +114,7 @@ def visiondl_run(problem_config, model=None, optimizer=None, callback=None):
     return train(callback=callback, **config)
 
 
-def expand_problem_config(dataset, dataset_fold, model, optimizer):
+def expand_problem_config(dataset, dataset_fold, model, optimizer, init):
     return {
         'data': {
             'name': dataset,
@@ -119,8 +122,8 @@ def expand_problem_config(dataset, dataset_fold, model, optimizer):
             'batch_size': 128},
         'model': expand_model_config(dataset, model),
         'optimizer': OPTIMIZER_CONFIGS[optimizer],
-        'model_seed': dataset_fold,
-        'sampler_seed': dataset_fold
+        'model_seed': init,
+        'sampler_seed': init 
         }
 
 
