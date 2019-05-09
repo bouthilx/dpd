@@ -117,12 +117,59 @@ def expand_problem_config(dataset, dataset_fold, model, optimizer):
             'name': dataset,
             'seed': (0, dataset_fold),
             'batch_size': 128},
-        'model': {
-            'name': model},
+        'model': expand_model_config(dataset, model),
         'optimizer': OPTIMIZER_CONFIGS[optimizer],
         'model_seed': dataset_fold,
         'sampler_seed': dataset_fold
         }
+
+
+def expand_model_config(dataset, model):
+    config = dict(name=model)
+    for key, model_configs in MODEL_CONFIGS.items():
+        if key in model:
+            config.update(model_configs.get(dataset, model_configs['default']))
+            break
+
+    return config
+
+
+MODEL_CONFIGS = {
+    'vgg': {
+        'default': {
+            'batch_norm': True,
+            'classifier': {
+                'input': 512,
+                'hidden': None
+                }
+            }
+        },
+    'preactresnet': {
+        'default': {
+            'conv': {
+                'kernel_size': 3,
+                'stride': 1,
+                'padding': 1
+                },
+            'maxpool': None,
+            'avgpool': {
+                'kernel_size': 4
+                }
+            }
+        },
+    'mobilenetv2': {
+        'default': {
+            'conv': {
+                'kernel_size': 3,
+                'stride': 1,
+                'padding': 1
+                },
+            'avgpool': {
+                'kernel_size': 4
+                }
+            }
+        }
+    }
 
 
 OPTIMIZER_CONFIGS = {
