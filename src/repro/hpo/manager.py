@@ -45,6 +45,14 @@ def _slow_function_service(slow_fun, in_queue: Queue, out_queue: Queue):
         out_queue.put(result)
 
 
+def _get_objective(trial):
+    last_results = trial.get_last_results()
+    if last_results:
+        return last_results[-1]["objective"]
+
+    return None
+
+
 class HPOManager:
     """ Manage a series of task - trials, it can create, suspend and resume those trials
         in function of the results it is receiving/observing through time
@@ -231,18 +239,18 @@ class HPOManager:
                 self.dispatcher.observe(trial, result)
 
             if trial.is_alive() and trial_id not in self.to_be_suspended_trials and self.dispatcher.should_suspend(trial_id):
-                logger.debug(f'{trial.id} {bcolors.WARNING}suspending{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
+                logger.debug(f'{trial.id} {bcolors.WARNING}suspending{bcolors.ENDC} {_get_objective(trial)}')
                 trial.stop()
                 to_be_suspended.add(trial_id)
 
             elif trial.has_finished():
-                logger.debug(f'{trial.id} {bcolors.OKBLUE}completed{bcolors.ENDC}{trial.get_last_results()[-1]["objective"]}')
+                logger.debug(f'{trial.id} {bcolors.OKBLUE}completed{bcolors.ENDC} {_get_objective(trial)}')
                 is_finished.add(trial_id)
                 trial.insert_timestamp('finished')
 
             # Trial was lost
             elif not trial.is_alive() and trial_id not in self.to_be_suspended_trials:
-                logger.debug(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
+                logger.debug(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {_get_objective(trial)}')
                 to_be_suspended.add(trial_id)
 
         for trial_id in is_finished:
@@ -291,7 +299,7 @@ class HPOManager:
             trial = self.get_trial(trial_id)
             self.suspended_trials.discard(trial_id)
             trial.start()
-            logger.debug(f'{trial.id} {bcolors.OKGREEN}resumed{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
+            logger.debug(f'{trial.id} {bcolors.OKGREEN}resumed{bcolors.ENDC} {_get_objective(trial)}')
             self.running_trials.add(trial_id)
 
         for trial_id in is_finished:
