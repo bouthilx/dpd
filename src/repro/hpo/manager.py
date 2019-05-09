@@ -208,7 +208,6 @@ class HPOManager:
 
                 trial.insert_timestamp('request', request_time)
                 trial.insert_timestamp('suggest', suggest_timestamp)
-                trial.insert_timestamp('creation')
 
                 trial.start()
                 logger.debug(f'{trial.id} {bcolors.OKGREEN}started{bcolors.ENDC}')
@@ -251,6 +250,7 @@ class HPOManager:
             # Trial was lost
             elif not trial.is_alive() and trial_id not in self.to_be_suspended_trials:
                 logger.debug(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {_get_objective(trial)}')
+                trial.insert_timestamp('lost')
                 to_be_suspended.add(trial_id)
 
         for trial_id in is_finished:

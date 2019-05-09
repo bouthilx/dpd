@@ -53,7 +53,7 @@ class ResumableAspect:
 
 class ResumeTrialAspect(ResumableAspect):
     def state_attributes(self):
-        return {'id', 'params', 'latest_results', 'timestamps', 'results'}
+        return {'id', 'params', 'latest_results', '_timestamps', 'results'}
 
 
 class ResumeManagerAspect(ResumableAspect):
@@ -66,7 +66,7 @@ class ResumeManagerAspect(ResumableAspect):
 
         # TODO: Restore using the proper backend
         def make_trial(trial_state, queue):
-            t = Trial(trial_state['id'], obj.task, trial_state['params'], queue)
+            t = obj.trial_factory(trial_state['id'], obj.task, trial_state['params'], queue)
             t.latest_results = trial_state['latest_results']
             return t
 

@@ -1,7 +1,9 @@
-from multiprocessing import Process
-from queue import Queue
+from multiprocessing import Process, Manager
+from queue import Queue, Empty
 from typing import Callable, Dict, List, Optional
+import bisect
 import copy
+import datetime
 import functools
 import logging
 import pickle
@@ -26,6 +28,8 @@ bcolors = BColors()
 
 # This will be run remotely with Mahler
 def mahler_callback(mahler_config, **kwargs):
+    kwargs['callback_timestamp'] = str(datetime.datetime.utcnow())
+
     logger = logging.getLogger(__name__ + '.callback')
     mahler_client = mahler.Client(**mahler_config)
     task_id = mahler.get_current_task_id()
@@ -136,7 +140,8 @@ class MahlerProcess(Process):
             if last_status is None or last_status.name != status.name:
                 logger.info(f'{self.trial_id}:{self.pid} {status}')
 
-            self.queue_metrics()
+            if status.name == 'Running':
+                self.queue_metrics()
             # if self.suspended:
             #     break
             # NOTE: We assume mahler is only used for long run tasks, hence why waiting at least 5
@@ -188,12 +193,54 @@ class MahlerTrial(Trial):
         self.kwargs['callback'] = functools.partial(mahler_callback, mahler_config={})
         self.operator_kwargs = dict(tags=tags, container=container)
         self.process = None
+        # self.manager = Manager()
+        # self.event_queue = self.manager.Queue()
+
+    @property
+    def timestamps(self):
+        mahler_client = mahler.Client()
+        tasks = list(mahler_client.find(tags=[self.id]))
+        if len(tasks) > 1:
+            logger.error(f'{self.trial_id}:{self.pid} {len(tasks)} tasks assigned to this trial id')
+            raise RuntimeError(f'Two tasks are assigned the trial id {self.trial_id}')
+        elif not tasks:
+            return self._timestamps
+
+        def is_running():
+            return timestamps and timestamps[-1][0] == 'start'
+
+        def is_stopped():
+            return ((not timestamps or timestamps[-1][0] in ['creation', 'stop', 'lost']) or
+                    (status[-1] != 'Running'))
+
+        events = tasks[0]._status.events
+        del tasks
+        mahler_client.close()
+    
+        _timestamps = copy.copy(self._timestamps)
+        timestamps = []
+        status = []
+        for event in events:
+            while _timestamps and _timestamps[0][1] < str(event['runtime_timestamp']):
+                timestamps.append(_timestamps.pop(0))
+
+            if event['item']['name'] == 'Running' and is_stopped():
+                if timestamps[-1][0] == 'observe':
+                    timestamps.append(('stop', timestamps[-1][1]))
+                timestamps.append(('start', str(event['runtime_timestamp'])))
+
+            status.append(event['item']['name'])
+
+        if status[-1] != 'Running':
+            timestamps.append(('stop', timestamps[-1][1]))
+
+        return timestamps
 
     def start(self) -> None:
         """start or resume a process if it is not already running"""
         if not self.is_alive():
             self.process = MahlerProcess(
-                trial_id=self.id, task=self.task, queue=self.queue,
+                trial_id=self.id, task=self.task, queue=self.queue, # event_queue=self.event_queue,
                 arguments=self.kwargs, operator_kwargs=self.operator_kwargs)
             self.process.start()
 

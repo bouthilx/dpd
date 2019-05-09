@@ -1,3 +1,4 @@
+import bisect
 import copy
 import datetime
 import functools
@@ -24,8 +25,13 @@ class Trial:
         self.kwargs['callback'] = functools.partial(callback, queue=queue)
         self.process: Optional[Process] = None
         self.latest_results = None
-        self.timestamps = []
+        self._timestamps = []
         self.results = []
+        self.insert_timestamp('creation')
+
+    @property
+    def timestamps(self):
+        return self._timestamps
 
     def is_alive(self) -> bool:
         return self.process and self.process.is_alive()
@@ -73,7 +79,8 @@ class Trial:
     def insert_timestamp(self, name, time=None):
         if time is None:
             time = str(datetime.datetime.utcnow())
-        self.timestamps.append((name, time))
+        idx = bisect.bisect_left([t[1] for t in self._timestamps], time)
+        self._timestamps.insert(idx, (name, time))
 
     def to_dict(self):
         return {
