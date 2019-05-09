@@ -3,6 +3,7 @@ import copy
 import functools
 import itertools
 import logging
+import pickle
 
 from typing import Iterable
 from orion.core.io.space_builder import Space, DimensionBuilder
@@ -79,8 +80,8 @@ class VisionDLBenchmark:
     def build(self, dataset, dataset_fold, model, optimizer):
         fixed_attributes = []
         benchmark_config = dict(getattr(self, name) for name in fixed_attributes)
-        ProblemType = namedtuple('VisionDLProblem', ['dataset', 'dataset_fold', 'model', 'optimizer',
-                                                   'tags', 'run', 'space', 'config'])
+        ProblemType = namedtuple('VisionDLProblem', ['dataset', 'dataset_fold', 'model',
+                                                     'optimizer', 'tags', 'run', 'space', 'config'])
 
         # TODO: inspect build_problem arguments to automatically map with problem_config
         problem_config = dict(dataset=dataset, dataset_fold=dataset_fold, model=model,
