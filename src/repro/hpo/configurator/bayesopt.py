@@ -7,7 +7,7 @@ try:
 except ImportError:
     PrimaryAlgo = None
 
-from repro.utils.flatten import unflatten
+from repro.utils.flatten import flatten, unflatten
 
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,8 @@ class BayesianOptimizer:
         return params
 
     def observe(self, params, objective):
+
+        params = flatten(params)
 
         params = [[params[param_name] for param_name in self.space.keys()]]
         results = [dict(objective=objective)]
