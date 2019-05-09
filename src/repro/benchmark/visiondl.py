@@ -8,40 +8,45 @@ import pickle
 from typing import Iterable
 from orion.core.io.space_builder import Space, DimensionBuilder
 
+try:
+    import mahler.client as mahler
+except ImportError:
+    mahler = None
+
+try:
+    from repro.train import train
+except ImportError:
+    train = None
+
 from repro.utils.flatten import flatten, unflatten
 
 
 logger = logging.getLogger(__name__)
 
 
-try:
-    import mahler.client as mahler
-except ImportError as e:
-    logger.warning(f'Cannot import mahler: {e}')
-    mahler = None
-
-try:
-    from repro.train import train
-except ImportError as e:
-    logger.warning(f'Cannot import train: {e}')
-    train = None
-
-
-DATASETS = ['mnist', 'fashionmnist', 'cifar10', 'cifar100', 'tinyimagenet']
+DATASETS = ['mnist', 'fashionmnist', 'svhn', 'cifar10', 'cifar100', 'tinyimagenet']
 DATASET_FOLDS = list(range(1, 11))
-MODELS = ['logreg', 'small_mlp', 'large_mlp', 'small_conv', 'large_conv']
+INITS = list(range(1, 11))
+MODELS = (
+    ['lenet'] +
+    [f'vgg{i}' for i in [11, 13, 16, 19]] +
+    [f'resnet{i}' for i in [18, 34, 50, 101]] +
+    [f'preactresnet{i}' for i in [18, 34, 50, 101]] +
+    [f'densenet{i}' for i in [121, 161, 169, 201]] +
+    ['mobilenetv2'])
 OPTIMIZERS = ['sgd', 'adam']
 
 
-class MiniDLBenchmark:
-    name = 'minidl'
-    attributes = ['datasets', 'dataset_folds', 'models', 'optimizers']
+class VisionDLBenchmark:
+    name = 'visiondl'
+    attributes = ['datasets', 'dataset_folds', 'models', 'optimizers', 'inits']
 
-    def __init__(self, datasets=None, dataset_folds=None, models=None, optimizers=None):
+    def __init__(self, datasets=None, dataset_folds=None, models=None, optimizers=None, inits=None):
         self.datasets = datasets if datasets else DATASETS
         self.dataset_folds = dataset_folds if dataset_folds else DATASET_FOLDS
         self.models = models if models else MODELS
         self.optimizers = optimizers if optimizers else OPTIMIZERS
+        self.inits = inits if inits else INITS
 
     def add_subparser(self, parser):
         benchmark_parser = parser.add_parser(self.name)
@@ -65,7 +70,7 @@ class MiniDLBenchmark:
 
     @property
     def problems(self) -> Iterable[any]:
-        prod_attributes = ['datasets', 'dataset_folds', 'models', 'optimizers']
+        prod_attributes = ['datasets', 'dataset_folds', 'models', 'optimizers', 'inits']
 
         configs = itertools.product(*[getattr(self, name) for name in prod_attributes])
 
@@ -77,12 +82,13 @@ class MiniDLBenchmark:
     def build(self, dataset, dataset_fold, model, optimizer):
         fixed_attributes = []
         benchmark_config = dict(getattr(self, name) for name in fixed_attributes)
-        ProblemType = namedtuple('MiniDLProblem', ['dataset', 'dataset_fold', 'model', 'optimizer',
-                                                   'tags', 'run', 'space', 'config'])
+        ProblemType = namedtuple('VisionDLProblem', ['dataset', 'dataset_fold', 'model',
+                                                     'optimizer', 'init', 'tags', 'run', 'space',
+                                                     'config'])
 
         # TODO: inspect build_problem arguments to automatically map with problem_config
         problem_config = dict(dataset=dataset, dataset_fold=dataset_fold, model=model,
-                              optimizer=optimizer)
+                              optimizer=optimizer, init=init)
         benchmark_config.update(problem_config)
         benchmark_config['tags'] = create_tags(**problem_config)
         benchmark_config['run'] = get_function(problem_config)
@@ -91,7 +97,7 @@ class MiniDLBenchmark:
         return ProblemType(config=problem_config, **benchmark_config)
 
 
-def minidl_run(problem_config, model=None, optimizer=None, callback=None):
+def visiondl_run(problem_config, model=None, optimizer=None, callback=None):
     config = expand_problem_config(**problem_config)
 
     params = dict()
@@ -108,19 +114,65 @@ def minidl_run(problem_config, model=None, optimizer=None, callback=None):
     return train(callback=callback, **config)
 
 
-def expand_problem_config(dataset, dataset_fold, model, optimizer):
+def expand_problem_config(dataset, dataset_fold, model, optimizer, init):
     return {
         'data': {
             'name': dataset,
             'seed': (0, dataset_fold),
-            'mini': True,
             'batch_size': 128},
-        'model': {
-            'name': model},
+        'model': expand_model_config(dataset, model),
         'optimizer': OPTIMIZER_CONFIGS[optimizer],
-        'model_seed': dataset_fold,
-        'sampler_seed': dataset_fold
+        'model_seed': init,
+        'sampler_seed': init 
         }
+
+
+def expand_model_config(dataset, model):
+    config = dict(name=model)
+    for key, model_configs in MODEL_CONFIGS.items():
+        if key in model:
+            config.update(model_configs.get(dataset, model_configs['default']))
+            break
+
+    return config
+
+
+MODEL_CONFIGS = {
+    'vgg': {
+        'default': {
+            'batch_norm': True,
+            'classifier': {
+                'input': 512,
+                'hidden': None
+                }
+            }
+        },
+    'preactresnet': {
+        'default': {
+            'conv': {
+                'kernel_size': 3,
+                'stride': 1,
+                'padding': 1
+                },
+            'maxpool': None,
+            'avgpool': {
+                'kernel_size': 4
+                }
+            }
+        },
+    'mobilenetv2': {
+        'default': {
+            'conv': {
+                'kernel_size': 3,
+                'stride': 1,
+                'padding': 1
+                },
+            'avgpool': {
+                'kernel_size': 4
+                }
+            }
+        }
+    }
 
 
 OPTIMIZER_CONFIGS = {
@@ -130,27 +182,6 @@ OPTIMIZER_CONFIGS = {
         'weight_decay': 10e-10},
     'adam': {
         'name': 'adam'}}
-
-
-MODEL_SPACES = {
-    'logreg': {},
-    'small_mlp': {
-        'width': 'loguniform(10, 1000, discrete=True)',
-    },
-    'large_mlp': {
-        'width': 'loguniform(10, 1000, discrete=True)',
-        'reductions': 'uniform(0.1, 1.2, shape=4)'
-    },
-    'small_conv': {
-        'widths': 'loguniform(32, 512, discrete=True, shape=2)',
-        'batch_norm': 'choices([True, False])'
-    },
-    'large_conv': {
-        'width': 'loguniform(32, 128, discrete=True)',
-        'reductions': 'uniform(0.9, 2.1, shape=4)',
-        'batch_norm': 'choices([True, False])'
-    }
-}
 
 
 OPTIMIZER_SPACES = {
@@ -173,7 +204,7 @@ OPTIMIZER_SPACES = {
 
 def create_tags(dataset, dataset_fold, model, optimizer):
     tags = [
-        'b-minidl',
+        'b-visiondl',
         f'd-{dataset}',
         f'f-{dataset_fold}',
         f'm-{model}',
@@ -190,10 +221,8 @@ def build_space(model, optimizer, **space_config):
     dimension_builder = DimensionBuilder()
 
     full_space_config = {
-        'model': MODEL_SPACES[model],
         'optimizer': OPTIMIZER_SPACES[optimizer]}
 
-    full_space_config['model'].update(space_config.get('model', {}))
     full_space_config['optimizer'].update(space_config.get('optimizer', {}))
 
     for name, prior in flatten(full_space_config).items():
@@ -216,16 +245,16 @@ def merge(config, subconfig):
 
 def get_function(problem_config):
     resources = {
-        'cpu': 6, 'mem': '10GB', 'gpu': 1,
-        'usage': {'cpu': {'util': 15, 'memory': 2 * 2 ** 30},
-                  'gpu': {'util': 10, 'memory': 2 ** 30}}}
+        'cpu': 6, 'mem': '25GB', 'gpu': 1,
+        'usage': {'cpu': {'util': 30, 'memory': 2 * 2 ** 30},
+                  'gpu': {'util': 10, 'memory': 2 * 2 ** 30}}}
 
     if mahler:
-        return mahler.operator(resources=resources)(minidl_run, problem_config=problem_config)
+        return mahler.operator(resources=resources)(visiondl_run, problem_config=problem_config)
     else:
-        return functools.partial(minidl_run, problem_config=problem_config)
+        return functools.partial(visiondl_run, problem_config=problem_config)
 
 
 if train is not None:
     def build(datasets=None, dataset_folds=None, models=None, optimizers=None, **kwargs):
-        return MiniDLBenchmark(datasets, dataset_folds, models, optimizers)
+        return VisionDLBenchmark(datasets, dataset_folds, models, optimizers)
