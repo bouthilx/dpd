@@ -18,12 +18,14 @@ except ImportError:
 from repro.benchmark.base import build_benchmark, build_problem, build_benchmark_subparsers
 
 import repro.hpo.trial.base
+
 from repro.hpo.dispatcher.base import build_dispatcher
 from repro.hpo.resource.base import build_resource_manager
 from repro.hpo.trial.base import build_trial
 from repro.hpo.manager import HPOManager
 from repro.utils.nesteddict import nesteddict
 from repro.utils.checkpoint import resume_from_checkpoint
+from repro.utils.chrono import Chrono
 
 LOG_FORMAT = '%(asctime)s:%(name)s:%(message)s'
 logger = logging.getLogger(__name__)
@@ -207,16 +209,27 @@ def execute(benchmark, options):
 
     optim_data = nesteddict()
 
-    for config in iterate(benchmark, options):
-        results = execute_problem(**config)
+    configurations = list(iterate(benchmark, options))
+    conf_count = len(configurations)
+    sum_runtime = 0
+    count = 0
 
-        # print(results)
-        tags = config['tags']
-        problem_key = checkpoint_key(tags)
-        # results = process_trials(trials)
+    for index, config in enumerate(configurations):
+        with Chrono() as t:
+            results = execute_problem(**config)
 
-        optim_data['index'][problem_key] = tags
-        optim_data['results'][problem_key] = results
+            # print(results)
+            tags = config['tags']
+            problem_key = checkpoint_key(tags)
+            # results = process_trials(trials)
+
+            optim_data['index'][problem_key] = tags
+            optim_data['results'][problem_key] = results
+
+        sum_runtime += t.val
+        count += 1
+        avg = sum_runtime / count
+        print(f'ETA [{index}/{conf_count}] {avg * (conf_count - index) / 60}  min')
 
     if not options.delay and options.save_out is not None:
         data = json.dumps(optim_data, indent=4)
