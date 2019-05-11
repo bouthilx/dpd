@@ -221,7 +221,7 @@ def execute(benchmark, options):
         optim_data['index'][problem_key] = tags
         optim_data['results'][problem_key] = results
 
-        # plot(trials, observations)
+        plot(problem_key, trials, observations)
 
     if not options.delay and options.save_out is not None:
         data = json.dumps(optim_data, indent=4)
@@ -339,7 +339,7 @@ def execute_problem(dispatcher_config, problem, workers, backend, container,
     return [trial.to_dict() for trial in manager.trials], manager.trials, dispatcher.observations
 
 
-def plot(trials, observations):
+def plot(problem_key, trials, observations):
 
     import matplotlib.pyplot as plt
 
@@ -378,7 +378,8 @@ def plot(trials, observations):
     x, y = list(zip(*list(sorted(density.items()))))
     axes[2].plot(x, [int(v / n * 100 + 0.5) for v in y])
 
-    plt.show()
+    plt.savefig(f'{problem_key}.png')
+    # plt.show()
 
 
 def visualize(benchmark, options):
