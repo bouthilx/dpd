@@ -37,6 +37,8 @@ class DPD(HPODispatcher):
 
         self.trials = {}
 
+        n_points *= 2  # Add some buffer just in case...
+
         # self.metrics = numpy.zeros((2000, 300))
         self.metrics = numpy.ones((int(initial_population * 1.1), n_points + 1)) * -1
         self.smooth_metrics = numpy.ones((int(initial_population * 1.1), n_points + 1)) * -1
@@ -61,7 +63,7 @@ class DPD(HPODispatcher):
 
     def add_metric(self, trial_id, step, value):
         # NOTE: We ignore step -1
-        if step < 0:
+        if step < 0 or step >= self.metrics.shape[1]:
             return
 
         metric_key = self.trials[trial_id]
