@@ -45,6 +45,14 @@ def _slow_function_service(slow_fun, in_queue: Queue, out_queue: Queue):
         out_queue.put(result)
 
 
+def _get_objective(trial):
+    last_results = trial.get_last_results()
+    if last_results:
+        return last_results[-1]["objective"]
+
+    return None
+
+
 class HPOManager:
     """ Manage a series of task - trials, it can create, suspend and resume those trials
         in function of the results it is receiving/observing through time
@@ -112,7 +120,7 @@ class HPOManager:
                 stop_count = self.receive_and_suspend()
                 any_change = any_change or stop_count > 0
 
-                if self.dispatcher.is_completed():
+                if self.dispatcher.is_completed() or self.trial_count >= self.max_trials:
                     logging.debug('HPO completed. Breaking out of run loop.')
                     break
 
@@ -200,7 +208,6 @@ class HPOManager:
 
                 trial.insert_timestamp('request', request_time)
                 trial.insert_timestamp('suggest', suggest_timestamp)
-                trial.insert_timestamp('creation')
 
                 trial.start()
                 logger.debug(f'{trial.id} {bcolors.OKGREEN}started{bcolors.ENDC}')
@@ -231,18 +238,19 @@ class HPOManager:
                 self.dispatcher.observe(trial, result)
 
             if trial.is_alive() and trial_id not in self.to_be_suspended_trials and self.dispatcher.should_suspend(trial_id):
-                logger.debug(f'{trial.id} {bcolors.WARNING}suspending{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
+                logger.debug(f'{trial.id} {bcolors.WARNING}suspending{bcolors.ENDC} {_get_objective(trial)}')
                 trial.stop()
                 to_be_suspended.add(trial_id)
 
             elif trial.has_finished():
-                logger.debug(f'{trial.id} {bcolors.OKBLUE}completed{bcolors.ENDC}{trial.get_last_results()[-1]["objective"]}')
+                logger.debug(f'{trial.id} {bcolors.OKBLUE}completed{bcolors.ENDC} {_get_objective(trial)}')
                 is_finished.add(trial_id)
                 trial.insert_timestamp('finished')
 
             # Trial was lost
             elif not trial.is_alive() and trial_id not in self.to_be_suspended_trials:
-                logger.debug(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
+                logger.debug(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {_get_objective(trial)}')
+                trial.insert_timestamp('lost')
                 to_be_suspended.add(trial_id)
 
         for trial_id in is_finished:
@@ -275,14 +283,18 @@ class HPOManager:
         to_be_resumed = set()
         is_finished = set()
 
+        available_workers = self.workers - len(self.running_trials) - self.pending_params
+
         for trial_id in self.suspended_trials:
             trial = self.get_trial(trial_id)
 
             if trial.has_finished():
                 is_finished.add(trial_id)
-                
-            elif self.dispatcher.should_resume(trial_id):
+                available_workers += 1
+
+            elif available_workers > 0 and self.dispatcher.should_resume(trial_id):
                 to_be_resumed.add(trial_id)
+                available_workers -= 1
 
                 if len(to_be_resumed) == count:
                     break
@@ -291,7 +303,7 @@ class HPOManager:
             trial = self.get_trial(trial_id)
             self.suspended_trials.discard(trial_id)
             trial.start()
-            logger.debug(f'{trial.id} {bcolors.OKGREEN}resumed{bcolors.ENDC} {trial.get_last_results()[-1]["objective"]}')
+            logger.debug(f'{trial.id} {bcolors.OKGREEN}resumed{bcolors.ENDC} {_get_objective(trial)}')
             self.running_trials.add(trial_id)
 
         for trial_id in is_finished:

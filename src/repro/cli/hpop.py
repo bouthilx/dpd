@@ -80,9 +80,9 @@ def main(argv=None):
         subparser.add_argument(
             '--workers', type=int, nargs='*', default=[1])
         subparser.add_argument(
-            '--max-trials', type=int, default=100)
-        subparser.add_argument(
             '--seeds', type=int, nargs='*', default=[1])
+        subparser.add_argument(
+            '--debug', action='store_true')
 
         # subparser.add_argument(
         #     '--seed', type=int, default=1,
@@ -146,7 +146,7 @@ def load_config(config_dir_path, benchmark, task, hpo_role, name):
         with open(config_path, 'r') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
     else:
-        logger.info(f'config file not found')
+        logger.info(f'config file not found {config_path}')
         config = {'name': name}
 
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
@@ -172,22 +172,25 @@ def iterate(benchmark, options):
         logger.info(f'{dispatcher} - {configurator} - workers:{workers} - seed:{seed} - '
                     f'problem:{problem.tags}')
 
-        dispatcher_config = load_config(options.config_dir_path, benchmark.name, 'hpo',
+        benchmark_name = benchmark.name
+        if options.debug:
+            benchmark_name += '_debug'
+        dispatcher_config = load_config(options.config_dir_path, benchmark_name, 'hpo',
                                         'dispatcher', dispatcher)
-        configurator_config = load_config(options.config_dir_path, benchmark.name, 'hpo',
+        configurator_config = load_config(options.config_dir_path, benchmark_name, 'hpo',
                                           'configurator', configurator)
 
         for config in [dispatcher_config, configurator_config]:
             config['seed'] = seed
-            config['max_trials'] = options.max_trials
+            # config['max_trials'] = options.max_trials
 
+        configurator_config['max_trials'] = dispatcher_config['max_trials']
         dispatcher_config['configurator_config'] = configurator_config
 
         tags = create_tags(options.version, dispatcher, configurator, seed, workers, problem)
 
         yield dict(dispatcher_config=dispatcher_config,
                    problem=problem,
-                   max_trials=options.max_trials,
                    workers=workers, backend=options.backend, container=options.container, tags=tags,
                    checkpoint=options.checkpoint, resume=not options.no_resume)
 
@@ -208,7 +211,6 @@ def execute(benchmark, options):
     logger.info(f'Benchmark: {benchmark.name}')
 
     optim_data = nesteddict()
-
     configurations = list(iterate(benchmark, options))
     conf_count = len(configurations)
     sum_runtime = 0
@@ -216,7 +218,7 @@ def execute(benchmark, options):
 
     for index, config in enumerate(configurations):
         with Chrono() as t:
-            results = execute_problem(**config)
+            results, trials, observations = execute_problem(**config)
 
             # print(results)
             tags = config['tags']
@@ -230,6 +232,8 @@ def execute(benchmark, options):
         count += 1
         avg = sum_runtime / count
         print(f'ETA [{index}/{conf_count}] {avg * (conf_count - index) / 60}  min')
+
+        plot(problem_key, trials, observations)
 
     if not options.delay and options.save_out is not None:
         data = json.dumps(optim_data, indent=4)
@@ -315,17 +319,17 @@ def init_builtin_checkpoint(manager, checkpoint_dir, resume, tags):
 #     manager.dispatcher.trial_count = len(trials)
 
 
-def mahler_execute_problem(dispatcher_config, problem_config, max_trials, workers, backend,
+def mahler_execute_problem(dispatcher_config, problem_config, workers, backend,
                            container, tags, checkpoint, resume):
 
     results = execute_problem(
-        dispatcher_config, build_problem(**problem_config), max_trials, workers, backend,
-        container, tags, checkpoint, resume)
+        dispatcher_config, build_problem(**problem_config), workers, backend,
+        container, tags, checkpoint, resume)[0]
 
     return dict(results=results)
 
 
-def execute_problem(dispatcher_config, problem, max_trials, workers, backend, container,
+def execute_problem(dispatcher_config, problem, workers, backend, container,
                     tags, checkpoint, resume):
 
     backend_config = dict(tags=tags, container=container)
@@ -337,17 +341,17 @@ def execute_problem(dispatcher_config, problem, max_trials, workers, backend, co
     trial_factory = functools.partial(build_trial, name=backend, **backend_config)
 
     manager = HPOManager(resource_manager, dispatcher, problem.run, trial_factory,
-                         max_trials=max_trials, workers=workers)
+                         max_trials=dispatcher.max_trials, workers=workers)
 
     init_checkpoint(backend, manager, checkpoint, resume, tags)
 
     manager.run()
     resource_manager.terminate()
 
-    return [trial.to_dict() for trial in manager.trials]
+    return [trial.to_dict() for trial in manager.trials], manager.trials, dispatcher.observations
 
 
-def plot(trials, observations):
+def plot(problem_key, trials, observations):
 
     import matplotlib.pyplot as plt
 
@@ -359,7 +363,7 @@ def plot(trials, observations):
     hpo_objectives = []
     n = 0
 
-    for trial in sorted(trials, key=lambda trial: trial.creation_time):
+    for trial in trials:  # sorted(trials, key=lambda trial: trial.creation_time):
         n += 1
         trial_observations = observations[trial.id]
 
@@ -386,7 +390,8 @@ def plot(trials, observations):
     x, y = list(zip(*list(sorted(density.items()))))
     axes[2].plot(x, [int(v / n * 100 + 0.5) for v in y])
 
-    plt.show()
+    plt.savefig(f'{problem_key}.png')
+    # plt.show()
 
 
 def visualize(benchmark, options):

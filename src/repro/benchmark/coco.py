@@ -89,7 +89,7 @@ class COCOBenchmark:
         return ProblemType(config=problem_config, **benchmark_config)
 
 
-def coco_run(problem_config, callback=None, **params):
+def coco_run(problem_config, params, callback=None):
     with Chrono() as t:
         problem = build_problem(**problem_config)
         objective = problem([params[get_dim_name(dim)] for dim in range(problem.dimension)])
@@ -123,7 +123,7 @@ def build_problem(problem_id, dimension, instance):
 def build_space(problem, **space_config):
     space = Space()
     for dim in range(problem.dimension):
-        name = get_dim_name(dim)
+        name = f'params.{get_dim_name(dim)}'
 
         if space_config.get(name, {}) is None:
             continue

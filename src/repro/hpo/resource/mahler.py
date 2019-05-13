@@ -52,7 +52,7 @@ def append_signal(sig, f):
 # TODO: Support local for debugging and multi-cluster for deployment.
 class MahlerResourceManager(ResourceManager):
 
-    def __init__(self, workers, resources, container, tags, workers_per_job=10, monitoring_interval=300):
+    def __init__(self, workers, resources, container, tags, workers_per_job=5, monitoring_interval=300):
         super(MahlerResourceManager, self).__init__(workers, resources)
         self.container = container
         self.tags = tags

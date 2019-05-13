@@ -53,7 +53,7 @@ class ResumableAspect:
 
 class ResumeTrialAspect(ResumableAspect):
     def state_attributes(self):
-        return {'id', 'params', 'latest_results', 'timestamps', 'results'}
+        return {'id', 'params', 'latest_results', '_timestamps', 'results'}
 
 
 class ResumeManagerAspect(ResumableAspect):
@@ -66,7 +66,7 @@ class ResumeManagerAspect(ResumableAspect):
 
         # TODO: Restore using the proper backend
         def make_trial(trial_state, queue):
-            t = Trial(trial_state['id'], obj.task, trial_state['params'], queue)
+            t = obj.trial_factory(trial_state['id'], obj.task, trial_state['params'], queue)
             t.latest_results = trial_state['latest_results']
             return t
 
@@ -115,14 +115,14 @@ class ResumeDispatcherAspect(ResumableAspect):
 
 class ResumeASHAAspect(ResumeDispatcherAspect):
     def state_attributes(self):
-        return super(ResumeASHAAspect, self).state_attributes() & {'rungs'}
+        return super(ResumeASHAAspect, self).state_attributes() | {'rungs'}
 
     def resume(self, obj: 'ASHA', state: Dict[str, any]):
         super(ResumeASHAAspect, self).resume(obj, state)
         # self.observations: Dict[str, Dict[str, int]]
 
         obj.rungs = defaultdict(set)
-        obj.rungs.update({k: set(v) for k, v in state['rungs'].items()})
+        obj.rungs.update({int(k): set(v) for k, v in state['rungs'].items()})
 
         return obj
 
@@ -172,8 +172,8 @@ def _register():
         ResumableAspect.register(ResumeNpInt(), numpy.int32)
         ResumableAspect.register(ResumeNpInt(), numpy.int64)
         ResumableAspect.register(ResumeNdArray(), numpy.ndarray)
-        ResumableAspect.register(ResumeDispatcherAspect(), HPODispatcher)
         ResumableAspect.register(ResumeASHAAspect(), ASHA)
+        ResumableAspect.register(ResumeDispatcherAspect(), HPODispatcher)
         ResumableAspect.register(ResumeResourceManagerAspect(), ResourceManager)
         ResumableAspect.register(ResumeManagerAspect(), HPOManager)
         ResumableAspect.register(ResumeTrialAspect(), Trial)
