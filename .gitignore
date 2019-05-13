@@ -71,3 +71,4 @@ docs/src/reference
 
 # PyBuilder
 target/
+*.html

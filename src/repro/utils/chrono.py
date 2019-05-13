@@ -17,3 +17,4 @@ class Chrono:
     @property
     def val(self):
         return self.end - self.start
+
