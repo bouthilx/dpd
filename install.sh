@@ -1,2 +1,5 @@
-pip install --upgrade git+https://github.com/bouthilx/orion.git@db2d068
-pip install --upgrade git+https://github.com/epistimio/orion.algo.skopt.git@71dcdd8
+pip install --upgrade git+https://github.com/bouthilx/orion.git@4558e1b54de317b72ef21d61fc332b3754e6b1a3
+pip install --upgrade git+https://github.com/bouthilx/orion.algo.optuna.git
+pip install --upgrade git+https://github.com/Epistimio/orion.algo.skopt.git@de8fa3c
+
+pip install -e '.[tpe,bayesopt,dpd]'

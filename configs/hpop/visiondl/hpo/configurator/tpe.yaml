@@ -1,7 +1,0 @@
-name: tpe
-consider_prior: True
-prior_weight: 1.0
-consider_magic_clip: True
-consider_endpoints: False
-n_startup_trials: 20
-n_ei_candidates: 24

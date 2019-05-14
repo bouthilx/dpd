@@ -1,5 +1,0 @@
-name: 'asha'
-max_trials: 448
-fidelities: [15, 30, 60, 120]
-reduction_factor: 4
-max_resource: 7

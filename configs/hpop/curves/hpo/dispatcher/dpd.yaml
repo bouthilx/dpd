@@ -1,9 +1,0 @@
-name: dpd
-max_trials: 512
-initial_population: 512
-final_population: 8
-n_steps: 30
-window_size: 11
-n_points: 100
-min_population: 3
-population_growth_brake: 0.75
