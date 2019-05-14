@@ -1,3 +1,4 @@
+import json
 from orion.core.io.space_builder import Space, DimensionBuilder
 
 from hpo.manager import HPOManager
@@ -29,6 +30,12 @@ dispatcher = ASHA(space, configurator_config=dict(name='random_search', max_tria
                   max_trials=600, seed=0)
 
 manager = HPOManager(resource_manager, dispatcher, task=main, max_trials=10,
-                     workers=4)
+                     gpus=['cuda:0'] * 4 + ['cuda:1'] * 4)
 
 manager.run()
+
+data = json.dumps([trial.to_dict() for trial in manager.trials], indent=4)
+json_file = open('test.json', 'w')
+json_file.write(data)
+json_file.write('\n')
+json_file.close()
