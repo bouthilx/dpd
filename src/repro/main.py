@@ -27,7 +27,6 @@ def build_space():
             print('Ignoring key {} with prior {}'.format(name, prior))
     return space
 
-
 space = build_space() 
 resource_manager = None
 max_trials = 512 
