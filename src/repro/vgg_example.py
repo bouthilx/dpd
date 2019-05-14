@@ -76,7 +76,6 @@ def train_loop(net, optimizer, loader, device):
         correct += predicted.eq(targets.data).cpu().sum()
         train_loss_norm = train_loss / (batch_idx + 1)
         ratio = float(total - correct) / total
-        break # TODO
     return train_loss_norm, ratio
 
 
@@ -98,29 +97,30 @@ def eval_loop(net, loader, device):
         correct += predicted.eq(targets.data).cpu().sum()
         test_loss_norm = test_loss / (batch_idx + 1)
         ratio = float(total - correct) / total
-        break # TODO
     return test_loss_norm, ratio
 
 
-def main(device='cuda:0', seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=2,
+def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=2,
          data_path=os.path.join(os.environ['SLURM_TMPDIR'], 'data'), id=None, 
          xp_path=os.environ['SLURM_TMPDIR'], nepochs=300, callback=None):
 
     # -------------------------------------------------------------------------
     # Preparing Model and Optimizer
 
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    random.seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    with torch.cuda.device(int(device.split(':')[1])):
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        random.seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     net = VGG11().to(device)
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9)
 
     if APEX_AVALIABLE:
         net, optimizer = amp.initialize(net, optimizer, opt_level='O3',
-                                        keep_batchnorm_fp32=True)
+                                        keep_batchnorm_fp32=True,
+                                        verbosity=0)
 
     if os.path.exists(xp_path):
         checkpoint = torch.load(xp_path, map_location=device)
@@ -165,9 +165,10 @@ def main(device='cuda:0', seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=2,
     # Main Loop
 
     for epoch in range(start_epoch + 1, nepochs + 1):
-        torch.manual_seed(seed + epoch)
-        torch.cuda.manual_seed_all(seed + epoch)
-        random.seed(seed + epoch)
+        with torch.cuda.device(int(device.split(':')[1])):
+            torch.manual_seed(seed + epoch)
+            torch.cuda.manual_seed_all(seed + epoch)
+            random.seed(seed + epoch)
 
         # Learning Rate Decay
         scheduler.step()

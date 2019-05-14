@@ -59,7 +59,8 @@ class HPOManager:
         in function of the results it is receiving/observing through time
      """
     def __init__(self, resource_manager, dispatcher, task: Callable,
-                 max_trials: int, workers: int, checkpoints=True):
+                 max_trials: int, checkpoints=True,
+                 gpus=['cuda:0'] * 4):
         """
         :param task: Task that uses the HPO parameters and return results
         """
@@ -68,7 +69,7 @@ class HPOManager:
         self.max_trials = max_trials
         # TODO: At the end of HPO, we may need less workers. This should be scaled for
         #       self.resource_manager.
-        self.workers = workers
+        self.workers = len(gpus)
 
         #self.resource_manager = resource_manager
         self.dispatcher = dispatcher
@@ -95,7 +96,9 @@ class HPOManager:
         self.request_timestamps = {}
         # Used to do quick lookups in self.trials
         self.trial_lookup = {}
-        self.gpus = ['cuda:0'] * 4 #+ ['cuda:1'] * 4 + ['cuda:2'] * 4 + ['cuda:3'] * 4 
+        self.gpus_queue = self.manager.Queue()
+        for gpu in gpus:
+            self.gpus_queue.put(gpu)
 
     def _insert_trial(self, trial):
         self.trials.append(trial)
@@ -214,7 +217,7 @@ class HPOManager:
                 trial.insert_timestamp('request', request_time)
                 trial.insert_timestamp('suggest', suggest_timestamp)
 
-                trial.start(self.gpus.pop())
+                trial.start(self.gpus_queue.get())
                 logger.debug(f'{trial.id} {bcolors.OKGREEN}started{bcolors.ENDC}')
                 self.running_trials.add(trial_id)
 
@@ -269,7 +272,7 @@ class HPOManager:
         #       to suspend properly
         for trial_id in (to_be_suspended | self.to_be_suspended_trials):
             trial = self.get_trial(trial_id)
-            self.gpus.append(trial.kwargs['device'])
+            self.gpus_queue.put(trial.kwargs.pop('device'))
 
             if not trial.is_alive():
                 logger.debug(f'{trial.id} {bcolors.WARNING}suspended{bcolors.ENDC}')
@@ -308,7 +311,7 @@ class HPOManager:
         for trial_id in to_be_resumed:
             trial = self.get_trial(trial_id)
             self.suspended_trials.discard(trial_id)
-            trial.start(self.gpus.pop())
+            trial.start(self.gpus_queue.get())
             logger.debug(f'{trial.id} {bcolors.OKGREEN}resumed{bcolors.ENDC} {_get_objective(trial)}')
             self.running_trials.add(trial_id)
 
