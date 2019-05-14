@@ -6,8 +6,8 @@ import random
 
 from typing import Dict
 
-from repro.utils.flatten import flatten, unflatten
-from repro.hpo.dispatcher.dispatcher import HPODispatcher
+from utils.flatten import flatten, unflatten
+from hpo.dispatcher.dispatcher import HPODispatcher
 
 
 logger = logging.getLogger(__name__)

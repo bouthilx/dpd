@@ -1,0 +1,34 @@
+from orion.core.io.space_builder import Space, DimensionBuilder
+
+from hpo.manager import HPOManager
+from hpo.dispatcher.asha import ASHA
+from vgg_example import main
+from utils.flatten import flatten
+
+
+def build_space():
+    space = Space()
+    dimension_builder = DimensionBuilder()
+    full_space_config = {'lr': 'loguniform(1.0e-5, 1.0)'}
+
+    for name, prior in flatten(full_space_config).items():
+        if not prior:
+            continue
+        try:
+            space[name] = dimension_builder.build(name, prior)
+        except TypeError as e:
+            print(str(e))
+            print('Ignoring key {} with prior {}'.format(name, prior))
+    return space
+
+resource_manager = None
+
+space = build_space() 
+dispatcher = ASHA(space, configurator_config=dict(name='random_search', max_trials=100, seed=10),
+                  fidelities=[15, 30, 60, 120], reduction_factor=4, max_resource=10,
+                  max_trials=600, seed=0)
+
+manager = HPOManager(resource_manager, dispatcher, task=main, max_trials=10,
+                     workers=4)
+
+manager.run()

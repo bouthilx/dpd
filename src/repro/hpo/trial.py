@@ -42,9 +42,10 @@ class Trial:
     def is_suspended(self) -> bool:
         return self.process is None and not self.has_finished()
 
-    def start(self) -> None:
+    def start(self, device) -> None:
         """ start or resume a process if it is not already running"""
         if not self.is_alive():
+            self.kwargs['device'] = device
             self.process = Process(target=self.task, kwargs=self.kwargs)
             self.process.start()
             self.insert_timestamp('start')

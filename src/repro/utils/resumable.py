@@ -160,11 +160,11 @@ class ResumeList(ResumableAspect):
 def _register():
     if set not in _resumable_aspect:
         # TODO: Verify that different backends are supported properly
-        from repro.hpo.trial.builtin import Trial
-        from repro.hpo.resource.builtin import ResourceManager
-        from repro.hpo.dispatcher.dispatcher import HPODispatcher
-        from repro.hpo.dispatcher.asha import ASHA
-        from repro.hpo.manager import HPOManager
+        from hpo.trial import Trial
+        from hpo.resource.builtin import ResourceManager
+        from hpo.dispatcher.dispatcher import HPODispatcher
+        from hpo.dispatcher.asha import ASHA
+        from hpo.manager import HPOManager
 
         ResumableAspect.register(ResumeSet(), set)
         ResumableAspect.register(ResumeDict(), dict)

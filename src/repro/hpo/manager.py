@@ -1,3 +1,4 @@
+import os
 from queue import Empty, Queue
 from typing import Callable
 import itertools
@@ -5,9 +6,9 @@ import logging
 import datetime
 from multiprocessing import Manager, Process
 
-from repro.utils.checkpoint import CheckPointer
-from repro.utils.bcolors import BColors
+from utils.bcolors import BColors
 
+from .trial import Trial
 
 logger = logging.getLogger(__name__)
 
@@ -57,20 +58,19 @@ class HPOManager:
     """ Manage a series of task - trials, it can create, suspend and resume those trials
         in function of the results it is receiving/observing through time
      """
-    def __init__(self, resource_manager, dispatcher, task: Callable, trial_factory: Callable,
+    def __init__(self, resource_manager, dispatcher, task: Callable,
                  max_trials: int, workers: int, checkpoints=True):
         """
         :param task: Task that uses the HPO parameters and return results
         """
         self.manager = Manager()
         self.task = task
-        self.trial_factory = trial_factory
         self.max_trials = max_trials
         # TODO: At the end of HPO, we may need less workers. This should be scaled for
         #       self.resource_manager.
         self.workers = workers
 
-        self.resource_manager = resource_manager
+        #self.resource_manager = resource_manager
         self.dispatcher = dispatcher
 
         self.running_trials = set()
@@ -95,6 +95,7 @@ class HPOManager:
         self.request_timestamps = {}
         # Used to do quick lookups in self.trials
         self.trial_lookup = {}
+        self.gpus = ['cuda:0'] * 4 #+ ['cuda:1'] * 4 + ['cuda:2'] * 4 + ['cuda:3'] * 4 
 
     def _insert_trial(self, trial):
         self.trials.append(trial)
@@ -103,13 +104,13 @@ class HPOManager:
     def insert_component(self, obj):
         self.components.append(obj)
 
-    def enable_checkpoints(self, name=None, **kwargs):
-        chk = CheckPointer(**kwargs)
-        chk.checkpoint_this(self, name=name)
-        self.insert_component(chk)
+    #def enable_checkpoints(self, name=None, **kwargs):
+    #    chk = CheckPointer(**kwargs)
+    #    chk.checkpoint_this(self, name=name)
+    #    self.insert_component(chk)
 
     def run(self):
-        self.resource_manager.start()
+        #self.resource_manager.start()
         self.param_service.start()
 
         try:
@@ -177,7 +178,7 @@ class HPOManager:
             self.get_trial(trial_id).stop()
 
         self.manager.shutdown()
-        self.resource_manager.terminate()
+        #self.resource_manager.terminate()
 
     def _queue_suggest(self) -> None:
         """ dummy function used to queue an async call to self.suggest """
@@ -199,7 +200,11 @@ class HPOManager:
                 self.pending_params -= 1
                 started += 1
 
-                trial = self.trial_factory(id=trial_id, task=self.task, params=params, queue=self.manager.Queue())
+                params.update({'id': trial_id,
+                               'data_path': os.path.join(os.environ['SLURM_TMPDIR'], 'data'),
+                               'xp_path': os.path.join(os.environ['SLURM_TMPDIR'], 'hpo', str(trial_id) + '.pt')})
+                trial = Trial(id=trial_id, task=self.task, params=params,
+                              queue=self.manager.Queue())
                 self._insert_trial(trial)
 
                 request_time = self.request_timestamps.pop(trial_id, None)
@@ -209,7 +214,7 @@ class HPOManager:
                 trial.insert_timestamp('request', request_time)
                 trial.insert_timestamp('suggest', suggest_timestamp)
 
-                trial.start()
+                trial.start(self.gpus.pop())
                 logger.debug(f'{trial.id} {bcolors.OKGREEN}started{bcolors.ENDC}')
                 self.running_trials.add(trial_id)
 
@@ -264,6 +269,7 @@ class HPOManager:
         #       to suspend properly
         for trial_id in (to_be_suspended | self.to_be_suspended_trials):
             trial = self.get_trial(trial_id)
+            self.gpus.append(trial.kwargs['device'])
 
             if not trial.is_alive():
                 logger.debug(f'{trial.id} {bcolors.WARNING}suspended{bcolors.ENDC}')
@@ -302,7 +308,7 @@ class HPOManager:
         for trial_id in to_be_resumed:
             trial = self.get_trial(trial_id)
             self.suspended_trials.discard(trial_id)
-            trial.start()
+            trial.start(self.gpus.pop())
             logger.debug(f'{trial.id} {bcolors.OKGREEN}resumed{bcolors.ENDC} {_get_objective(trial)}')
             self.running_trials.add(trial_id)
 

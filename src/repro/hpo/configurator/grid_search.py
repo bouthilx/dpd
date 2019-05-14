@@ -5,7 +5,7 @@ import pprint
 import numpy
 
 from orion.core.worker.transformer import build_required_space
-from repro.utils.flatten import unflatten
+from utils.flatten import unflatten
 
 
 logger = logging.getLogger(__name__)

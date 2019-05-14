@@ -7,7 +7,7 @@ try:
 except ImportError:
     PrimaryAlgo = None
 
-from repro.utils.flatten import flatten, unflatten
+from utils.flatten import flatten, unflatten
 
 
 logger = logging.getLogger(__name__)
