@@ -112,11 +112,12 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
     # -------------------------------------------------------------------------
     # Preparing Model and Optimizer
 
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    random.seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    with torch.cuda.device(int(device.split(':')[1])):
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        random.seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     net = VGG11(dropout).to(device)
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9)
@@ -169,9 +170,10 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
     # Main Loop
 
     for epoch in range(start_epoch + 1, nepochs + 1):
-        torch.manual_seed(seed + epoch)
-        torch.cuda.manual_seed_all(seed + epoch)
-        random.seed(seed + epoch)
+        with torch.cuda.device(int(device.split(':')[1])):
+            torch.manual_seed(seed + epoch)
+            torch.cuda.manual_seed_all(seed + epoch)
+            random.seed(seed + epoch)
 
         # Learning Rate Decay
         scheduler.step()
