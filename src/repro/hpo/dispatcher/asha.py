@@ -2,7 +2,8 @@ import logging
 
 import numpy
 
-from repro.hpo.dispatcher.dispatcher import HPODispatcher
+from utils.flatten import flatten, unflatten
+from hpo.dispatcher.dispatcher import HPODispatcher
 
 
 logger = logging.getLogger(__name__)

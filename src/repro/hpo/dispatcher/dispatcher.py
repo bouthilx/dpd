@@ -7,7 +7,7 @@ import numpy
 
 from typing import Dict, Tuple
 
-from repro.hpo.configurator.base import build_configurator
+from ..configurator.base import build_configurator
 
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ class HPODispatcher:
         params = self.params[trial_id] = self.suggest(seed)
 
         # ugly hack to import state here and avoid circular imports...
-        from repro.utils.resumable import state
+        from utils.resumable import state
         return trial_id, state(params)
 
     def suggest(self, seed) -> Dict[str, any]:

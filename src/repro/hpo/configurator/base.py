@@ -1,7 +1,7 @@
-from repro.utils.factory import fetch_factories
+from utils.factory import fetch_factories
 
 
-factories = fetch_factories('repro.hpo.configurator', __file__)
+factories = fetch_factories('hpo.configurator', __file__)
 
 
 def build_configurator(space, name=None, **kwargs):
