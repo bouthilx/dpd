@@ -1,6 +1,6 @@
 import numpy
 
-from hpo.dispatcher.dispatcher import HPODispatcher
+from repro.hpo.dispatcher.dispatcher import HPODispatcher
 
 
 def build(space, configurator_config, max_trials, seed, grace_period, min_samples_required):

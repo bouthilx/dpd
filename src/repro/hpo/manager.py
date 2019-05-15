@@ -6,9 +6,9 @@ import logging
 import datetime
 from multiprocessing import Manager, Process
 
-from utils.bcolors import BColors
+from repro.utils.bcolors import BColors
 
-from .trial import Trial
+from repro.hpo.trial import Trial
 
 logger = logging.getLogger(__name__)
 

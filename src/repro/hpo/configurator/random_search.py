@@ -2,7 +2,7 @@ import logging
 import pprint
 import random
 
-from utils.flatten import unflatten
+from repro.utils.flatten import unflatten
 
 
 logger = logging.getLogger(__name__)
