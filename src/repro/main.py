@@ -27,7 +27,6 @@ def build_space():
             print('Ignoring key {} with prior {}'.format(name, prior))
     return space
 
-
 space = build_space() 
 resource_manager = None
 max_trials = 512 
@@ -52,6 +51,8 @@ else:
 manager = HPOManager(resource_manager, dispatcher, task=main, max_trials=max_trials,
                      #gpus=['cuda:0'] * 8 + ['cuda:1'] * 8 + ['cuda:2'] * 8 + ['cuda:3'] * 8)
                      gpus=['cuda:0', 'cuda:1', 'cuda:2', 'cuda:3'] * 8)
+resource_manager = None
+max_trials = 512 
 
 manager.run()
 
