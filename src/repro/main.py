@@ -40,8 +40,9 @@ if algo == 'asha':
                       max_epochs=120, grace_period=1, reduction_factor=4, brackets=brackets,
                       max_trials=max_trials, seed=0)
 elif algo == 'msr':
+    max_trials = 256
     out_file = algo + '.json'
-    dispatcher = MedianStoppingRule(space, dict(name='random_search', max_trials=256, seed=10), max_trials=256,
+    dispatcher = MedianStoppingRule(space, dict(name='random_search', max_trials=max_trials, seed=10), max_trials=max_trials,
                                     seed=0, grace_period=10, min_samples_required=3)
 else:
     max_trials = 63
