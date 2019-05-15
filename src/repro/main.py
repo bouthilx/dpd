@@ -5,6 +5,8 @@ from orion.core.io.space_builder import Space, DimensionBuilder
 
 from hpo.manager import HPOManager
 from hpo.dispatcher.asha import ASHA
+from hpo.dispatcher.median_stopping_rule import MedianStoppingRule
+from hpo.dispatcher.stub import Stub
 from vgg_example import main
 from utils.flatten import flatten
 
@@ -14,8 +16,8 @@ logging.basicConfig(level=logging.DEBUG)
 def build_space():
     space = Space()
     dimension_builder = DimensionBuilder()
-    full_space_config = {'lr': 'loguniform(1.0e-4, 10)',
-                         'dropout': 'uniform(0.0, 0.5)'}
+    full_space_config = {'lr': 'loguniform(1.0e-5, 1)',
+                         'dropout': 'uniform(0.0, 1.0)'}
 
     for name, prior in flatten(full_space_config).items():
         if not prior:
@@ -27,28 +29,48 @@ def build_space():
             print('Ignoring key {} with prior {}'.format(name, prior))
     return space
 
-space = build_space() 
-resource_manager = None
-max_trials = 512 
 
-# ASHA
-dispatcher_type = sys.argv[1]
-if dispatcher_type == 'asha':
+algo = sys.argv[1]
+space = build_space() 
+if algo == 'asha':
+    max_trials = 512 
     brackets = int(sys.argv[2])
     out_file = 'dispatcher=' + sys.argv[1] + ',brackets=' + sys.argv[2] + '.json'
     dispatcher = ASHA(space, configurator_config=dict(name='random_search', max_trials=max_trials, seed=10),
                       max_epochs=120, grace_period=1, reduction_factor=4, brackets=brackets,
                       max_trials=max_trials, seed=0)
-elif dispatcher_type == 'bayesopt':
-    raise NotImplementedError
-elif dispatcher_type == 'tpe':
-    raise NotImplementedError
-elif dispatcher_type == 'random':
-    raise NotImplementedError
+elif algo == 'msr':
+    out_file = algo + '.json'
+    dispatcher = MedianStoppingRule(space, dict(name='random_search', max_trials=256, seed=10), max_trials=256,
+                                    seed=0, grace_period=10, min_samples_required=3)
 else:
-    raise NotImplementedError
+    max_trials = 63
+    out_file = algo + '.json'
+    if algo == 'bayesopt':
+        config = {'name': 'bayesopt',
+                  'strategy': 'cl_min',
+                  'n_initial_points': 32,
+                  'acq_func': 'gp_hedge',
+                  'alpha': 1.0e-10,
+                  'n_restarts_optimizer': 0,
+                  'normalize_y': False,
+                  'noise': None}
+    elif algo == 'tpe':
+        config = {'name': 'tpe',
+                  'consider_prior': True,
+                  'prior_weight': 1.0,
+                  'consider_magic_clip': True,
+                  'consider_endpoints': False,
+                  'n_startup_trials': 32,
+                  'n_ei_candidates': 24}
+    elif algo == 'random':
+        config = {'name': 'random_search'}
+    else:
+        raise NotImplementedError
+    config.update({'max_trials': max_trials, 'seed': 10})
+    dispatcher = Stub(space, configurator_config=config, max_trials=max_trials, seed=0)
 
-manager = HPOManager(resource_manager, dispatcher, task=main, max_trials=max_trials,
+manager = HPOManager(None, dispatcher, task=main, max_trials=max_trials,
                      #gpus=['cuda:0'] * 8 + ['cuda:1'] * 8 + ['cuda:2'] * 8 + ['cuda:3'] * 8)
                      gpus=['cuda:0', 'cuda:1', 'cuda:2', 'cuda:3'] * 8)
 
