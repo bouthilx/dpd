@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import os
 import random
-import time
 
 import torch
 import torch.nn as nn
@@ -19,14 +18,15 @@ except ImportError:
 
 class VGG11(nn.Module):
 
-    def __init__(self):
+    def __init__(self, dropout):
         super(VGG11, self).__init__()
         dims = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
         modules = []
         in_dim = 3
         for i, dim in enumerate(dims):
             if dim == 'M':
-                modules += [nn.MaxPool2d(kernel_size=2, stride=2)]
+                modules += [nn.MaxPool2d(kernel_size=2, stride=2),
+                            nn.Dropout2d(dropout, inplace=True)]
             else:
                 modules += [nn.Conv2d(in_dim, dim, kernel_size=3, padding=1,
                                       bias=False),
@@ -103,7 +103,8 @@ def eval_loop(net, loader, device):
 
 def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
          data_path=os.path.join(os.environ['SLURM_TMPDIR'], 'data'), id=None, 
-         xp_path=os.environ['SLURM_TMPDIR'], nepochs=300, callback=None):
+         xp_path=os.environ['SLURM_TMPDIR'], nepochs=300, callback=None,
+         dropout=0.0):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = device.split(':')[1]
     device = 'cuda'
@@ -117,7 +118,7 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    net = VGG11().to(device)
+    net = VGG11(dropout).to(device)
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9)
 
     if APEX_AVALIABLE:
@@ -168,7 +169,6 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
     # Main Loop
 
     for epoch in range(start_epoch + 1, nepochs + 1):
-        timer = time.time()
         torch.manual_seed(seed + epoch)
         torch.cuda.manual_seed_all(seed + epoch)
         random.seed(seed + epoch)
@@ -183,7 +183,6 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
         if valid_m < best_err:
             best_err = valid_m
 
-        print(time.time() - timer)
         torch.save({'net_state_dict': net.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'best_err': best_err,
