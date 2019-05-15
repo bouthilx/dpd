@@ -1,6 +1,6 @@
 from typing import Callable, Dict, List       
 
-from repro.hpo.dispatcher.dispatcher import HPODispatcher
+from hpo.dispatcher.dispatcher import HPODispatcher
 
 
 class Stub(HPODispatcher):

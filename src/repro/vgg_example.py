@@ -18,7 +18,7 @@ except ImportError:
 
 class VGG11(nn.Module):
 
-    def __init__(self, dropout):
+    def __init__(self, dropout, bn=False):
         super(VGG11, self).__init__()
         dims = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M']
         modules = []
@@ -28,10 +28,15 @@ class VGG11(nn.Module):
                 modules += [nn.MaxPool2d(kernel_size=2, stride=2),
                             nn.Dropout2d(dropout, inplace=True)]
             else:
-                modules += [nn.Conv2d(in_dim, dim, kernel_size=3, padding=1,
-                                      bias=False),
-                            nn.BatchNorm2d(dim),
-                            nn.ReLU(inplace=True)]
+                if bn:
+                    modules += [nn.Conv2d(in_dim, dim, kernel_size=3,
+                                          padding=1, bias=False),
+                                nn.BatchNorm2d(dim),
+                                nn.ReLU(inplace=True)]
+                else:
+                    modules += [nn.Conv2d(in_dim, dim, kernel_size=3,
+                                          padding=1, bias=True),
+                                nn.ReLU(inplace=True)]
                 in_dim = dim
         modules += [nn.Conv2d(in_dim, 10, kernel_size=1, padding=0,
                               bias=True)]
@@ -104,7 +109,7 @@ def eval_loop(net, loader, device):
 def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
          data_path=os.path.join(os.environ['SLURM_TMPDIR'], 'data'), id=None, 
          xp_path=os.environ['SLURM_TMPDIR'], nepochs=300, callback=None,
-         dropout=0.0):
+         dropout=0.0, bn=False):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = device.split(':')[1]
     device = 'cuda'
@@ -118,8 +123,9 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    net = VGG11(dropout).to(device)
-    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9)
+    net = VGG11(dropout, bn).to(device)
+    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9,
+                                weight_decay=5e-4)
 
     if APEX_AVALIABLE:
         net, optimizer = amp.initialize(net, optimizer, opt_level='O3',
