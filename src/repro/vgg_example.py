@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import random
+import time
 
 import torch
 import torch.nn as nn
@@ -100,19 +101,21 @@ def eval_loop(net, loader, device):
     return test_loss_norm, ratio
 
 
-def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=2,
+def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
          data_path=os.path.join(os.environ['SLURM_TMPDIR'], 'data'), id=None, 
          xp_path=os.environ['SLURM_TMPDIR'], nepochs=300, callback=None):
+
+    os.environ['CUDA_VISIBLE_DEVICES'] = device.split(':')[1]
+    device = 'cuda'
 
     # -------------------------------------------------------------------------
     # Preparing Model and Optimizer
 
-    with torch.cuda.device(int(device.split(':')[1])):
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        random.seed(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     net = VGG11().to(device)
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9)
@@ -165,10 +168,10 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=2,
     # Main Loop
 
     for epoch in range(start_epoch + 1, nepochs + 1):
-        with torch.cuda.device(int(device.split(':')[1])):
-            torch.manual_seed(seed + epoch)
-            torch.cuda.manual_seed_all(seed + epoch)
-            random.seed(seed + epoch)
+        timer = time.time()
+        torch.manual_seed(seed + epoch)
+        torch.cuda.manual_seed_all(seed + epoch)
+        random.seed(seed + epoch)
 
         # Learning Rate Decay
         scheduler.step()
@@ -180,7 +183,7 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=2,
         if valid_m < best_err:
             best_err = valid_m
 
-        print(id, train_m, valid_m)
+        print(time.time() - timer)
         torch.save({'net_state_dict': net.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'best_err': best_err,
