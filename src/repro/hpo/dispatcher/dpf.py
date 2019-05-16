@@ -55,7 +55,7 @@ class DPF(HPODispatcher):
         self.suspension_matrix = self.compute_suspension_matrix(self.get_decision_steps())
 
     def is_completed(self):
-        return self.finished and self.trials_count >= self.max_trials
+        return len(self.finished) >= self.final_population # and self.trials_count >= self.max_trials
 
     def add_trial(self, trial_id):
         added = trial_id not in self.trials

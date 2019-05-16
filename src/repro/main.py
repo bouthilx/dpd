@@ -46,16 +46,16 @@ if algo == 'asha':
                       max_epochs=120, grace_period=1, reduction_factor=4, brackets=brackets,
                       max_trials=max_trials, seed=0)
 elif algo == 'msr':
-    max_trials = 256
+    max_trials = 96 
     dispatcher = MedianStoppingRule(space, dict(name='random_search', max_trials=max_trials, seed=10), max_trials=max_trials,
                                     seed=0, grace_period=10, min_samples_required=3)
 elif algo == 'dpf':
-    max_trials = 512 
+    max_trials = 5120 
     step_ratio = float(sys.argv[2])
     out_file = 'dispatcher=' + algo + ',step_ratio=' + sys.argv[2] + '.json'
     dispatcher = DPF(space, dict(name='random_search', max_trials=max_trials, seed=10),
                      max_trials=max_trials, seed=0, steps_ratio=step_ratio,
-                     asynchronicity=1.0, max_epochs=120)
+                     asynchronicity=0.5, final_population=10, max_epochs=120)
 else:
     max_trials = 63
     if algo == 'bayesopt':

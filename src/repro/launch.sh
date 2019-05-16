@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=186G 
 #SBATCH --gres=gpu:4
-#SBATCH --time=2:59:00
+#SBATCH --time=11:59:00
 ##SBATCH -o /dev/null # NO STDOUT
 ##SBATCH -e /dev/null # STDERR
 ##SBATCH -o /scratch/claurent/slurm/slurm.%A_%a.%N.out
