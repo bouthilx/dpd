@@ -108,7 +108,7 @@ def eval_loop(net, loader, device):
 
 def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
          data_path=os.path.join(os.environ['SLURM_TMPDIR'], 'data'), id=None, 
-         xp_path=os.environ['SLURM_TMPDIR'], nepochs=300, callback=None,
+         xp_path=os.environ['SLURM_TMPDIR'], nepochs=120, callback=None,
          dropout=0.0, bn=False):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = device.split(':')[1]

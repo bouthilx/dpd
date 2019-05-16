@@ -1,3 +1,5 @@
+import os
+import time
 import sys
 import logging
 import json
@@ -6,6 +8,7 @@ from orion.core.io.space_builder import Space, DimensionBuilder
 from hpo.manager import HPOManager
 from hpo.dispatcher.asha import ASHA
 from hpo.dispatcher.median_stopping_rule import MedianStoppingRule
+from hpo.dispatcher.dpf import DPF
 from hpo.dispatcher.stub import Stub
 from vgg_example import main
 from utils.flatten import flatten
@@ -29,8 +32,11 @@ def build_space():
             print('Ignoring key {} with prior {}'.format(name, prior))
     return space
 
-
+timer = time.time()
 algo = sys.argv[1]
+out_file = 'dispatcher=' + algo + '.json'
+print(out_file)
+print(os.getcwd())
 space = build_space() 
 if algo == 'asha':
     max_trials = 512 
@@ -41,12 +47,14 @@ if algo == 'asha':
                       max_trials=max_trials, seed=0)
 elif algo == 'msr':
     max_trials = 256
-    out_file = algo + '.json'
     dispatcher = MedianStoppingRule(space, dict(name='random_search', max_trials=max_trials, seed=10), max_trials=max_trials,
                                     seed=0, grace_period=10, min_samples_required=3)
+elif algo == 'dpf':
+    max_trials = 512 
+    dispatcher = DPF(space, dict(name='random_search', max_trials=max_trials, seed=10), max_trials=max_trials, seed=0, steps_ratio=0.5,
+                     asynchronicity=1.0, max_epochs=120)
 else:
     max_trials = 63
-    out_file = algo + '.json'
     if algo == 'bayesopt':
         config = {'name': 'bayesopt',
                   'strategy': 'cl_min',
@@ -82,3 +90,5 @@ json_file = open(out_file, 'w')
 json_file.write(data)
 json_file.write('\n')
 json_file.close()
+
+print(time.time() - timer)

@@ -266,6 +266,8 @@ class HPOManager:
             # Maybe it was supposed to be suspended but completed before it could suspend.
             self.to_be_suspended_trials.discard(trial_id)
             self.running_trials.discard(trial_id)
+            trial = self.get_trial(trial_id)
+            self.gpus_queue.put(trial.kwargs.pop('device'))
 
         # NOTE: The trial will be detected as stopped later on anyway
         #       This delay is accorded so that high latency trials have a chance 
