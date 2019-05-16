@@ -52,6 +52,7 @@ elif algo == 'msr':
 elif algo == 'dpf':
     max_trials = 512 
     step_ratio = float(sys.argv[2])
+    out_file = 'dispatcher=' + algo + ',step_ratio=' + sys.argv[2] + '.json'
     dispatcher = DPF(space, dict(name='random_search', max_trials=max_trials, seed=10),
                      max_trials=max_trials, seed=0, steps_ratio=step_ratio,
                      asynchronicity=1.0, max_epochs=120)
