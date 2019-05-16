@@ -51,7 +51,9 @@ elif algo == 'msr':
                                     seed=0, grace_period=10, min_samples_required=3)
 elif algo == 'dpf':
     max_trials = 512 
-    dispatcher = DPF(space, dict(name='random_search', max_trials=max_trials, seed=10), max_trials=max_trials, seed=0, steps_ratio=0.5,
+    step_ratio = float(sys.argv[2])
+    dispatcher = DPF(space, dict(name='random_search', max_trials=max_trials, seed=10),
+                     max_trials=max_trials, seed=0, steps_ratio=step_ratio,
                      asynchronicity=1.0, max_epochs=120)
 else:
     max_trials = 63
