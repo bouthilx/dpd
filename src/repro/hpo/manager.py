@@ -252,6 +252,7 @@ class HPOManager:
                 logger.debug(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {_get_objective(trial)}')
                 trial.insert_timestamp('lost')
                 to_be_suspended.add(trial_id)
+                raise RuntimeError(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {_get_objective(trial)}')
 
         for trial_id in is_finished:
             self.finished_trials.add(trial_id)
