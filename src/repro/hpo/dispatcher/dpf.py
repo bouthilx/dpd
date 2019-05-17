@@ -111,15 +111,17 @@ class DPF(HPODispatcher):
         return int(self.ratio * 100 + 0.5)
 
     def get_decision_steps(self):
-        steps = self._get_decision_steps()
-        # Create a mask based on steps
-        suspension = self.compute_suspension_matrix(steps)
+        return self._get_decision_steps()
 
-        mask = (self.metrics >= 0)
-        for i, step in enumerate(steps):
-            mask[:self.trials_count, step:] *= (suspension[:, i] < 1)[:, None]
+        # steps = self._get_decision_steps()
+        # # Create a mask based on steps
+        # suspension = self.compute_suspension_matrix(steps)
 
-        return self._get_decision_steps(mask)
+        # mask = (self.metrics >= 0)
+        # for i, step in enumerate(steps):
+        #     mask[:self.trials_count, step:] *= (suspension[:, i] < 1)[:, None]
+
+        # return self._get_decision_steps(mask)
 
     def _get_decision_steps(self, mask=None):
         """Compute at which steps suspension should occur based on metric history"""
