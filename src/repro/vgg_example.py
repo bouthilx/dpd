@@ -5,7 +5,7 @@ import random
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
-from torchvision.datasets import CIFAR10
+from torchvision.datasets import CIFAR100
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import DataLoader
 
@@ -38,7 +38,7 @@ class VGG11(nn.Module):
                                           padding=1, bias=True),
                                 nn.ReLU(inplace=True)]
                 in_dim = dim
-        modules += [nn.Conv2d(in_dim, 10, kernel_size=1, padding=0,
+        modules += [nn.Conv2d(in_dim, 100, kernel_size=1, padding=0,
                               bias=True)]
         self.net = nn.Sequential(*modules)
         self.kaiming_init()
@@ -106,10 +106,10 @@ def eval_loop(net, loader, device):
     return test_loss_norm, ratio
 
 
-def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
+def main(device=None, seed=1111, lr=0.01, step_size=60, decay=0.1, l2=5e-4, bs=100, num_workers=0,
          data_path=os.path.join(os.environ['SLURM_TMPDIR'], 'data'), id=None, 
          xp_path=os.environ['SLURM_TMPDIR'], nepochs=120, callback=None,
-         dropout=0.0, bn=False):
+         dropout=0.0, bn=True):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = device.split(':')[1]
     device = 'cuda'
@@ -125,7 +125,7 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
 
     net = VGG11(dropout, bn).to(device)
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9,
-                                weight_decay=5e-4)
+                                weight_decay=l2)
 
     if APEX_AVALIABLE:
         net, optimizer = amp.initialize(net, optimizer, opt_level='O3',
@@ -142,7 +142,7 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
         best_err = 1
         start_epoch = 0
 
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=60,
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size,
                                                 gamma=decay,
                                                 last_epoch=start_epoch-1)
 
@@ -159,10 +159,10 @@ def main(device=None, seed=1111, lr=0.01, decay=0.1, bs=100, num_workers=0,
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))])
 
-    train_set = CIFAR10(root=data_path, train=True, download=False,
-                        transform=transform_train)
-    valid_set = CIFAR10(root=data_path, train=True, download=False,
-                        transform=transform_test)
+    train_set = CIFAR100(root=data_path, train=True, download=False,
+                         transform=transform_train)
+    valid_set = CIFAR100(root=data_path, train=True, download=False,
+                         transform=transform_test)
 
     train_loader = DataLoader(train_set, batch_size=bs,
                               sampler=SubsetRandomSampler(range(45000)),

@@ -20,7 +20,9 @@ def build_space():
     space = Space()
     dimension_builder = DimensionBuilder()
     full_space_config = {'lr': 'loguniform(1.0e-5, 1)',
-                         'dropout': 'uniform(0.0, 1.0)'}
+                         'l2': 'loguniform(1.0e-7, 1.0e-2)',
+                         'decay': 'loguniform(0.01, 1)',
+                         'step_size': 'uniform(10, 100, discrete=True)'}
 
     for name, prior in flatten(full_space_config).items():
         if not prior:
@@ -34,14 +36,14 @@ def build_space():
 
 timer = time.time()
 algo = sys.argv[1]
-out_file = 'dispatcher=' + algo + '.json'
+out_file = 'data=cifar100,bn=True,dispatcher=' + algo + '.json'
 print(out_file)
 print(os.getcwd())
 space = build_space() 
 if algo == 'asha':
     max_trials = 512 
     brackets = int(sys.argv[2])
-    out_file = 'dispatcher=' + sys.argv[1] + ',brackets=' + sys.argv[2] + '.json'
+    out_file = 'data=cifar100,bn=True,dispatcher=' + sys.argv[1] + ',brackets=' + sys.argv[2] + '.json'
     dispatcher = ASHA(space, configurator_config=dict(name='random_search', max_trials=max_trials, seed=10),
                       max_epochs=120, grace_period=1, reduction_factor=4, brackets=brackets,
                       max_trials=max_trials, seed=0)
@@ -50,12 +52,12 @@ elif algo == 'msr':
     dispatcher = MedianStoppingRule(space, dict(name='random_search', max_trials=max_trials, seed=10), max_trials=max_trials,
                                     seed=0, grace_period=10, min_samples_required=3)
 elif algo == 'dpf':
-    max_trials = 5120 
+    max_trials = 768 
     step_ratio = float(sys.argv[2])
-    out_file = 'dispatcher=' + algo + ',step_ratio=' + sys.argv[2] + '.json'
+    out_file = 'data=cifar100,bn=True,dispatcher=' + algo + ',step_ratio=' + sys.argv[2] + '.json'
     dispatcher = DPF(space, dict(name='random_search', max_trials=max_trials, seed=10),
                      max_trials=max_trials, seed=0, steps_ratio=step_ratio,
-                     asynchronicity=0.5, final_population=10, max_epochs=120)
+                     asynchronicity=0.5, final_population=3, max_epochs=120)
 else:
     max_trials = 63
     if algo == 'bayesopt':
