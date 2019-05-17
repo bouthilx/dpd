@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 class DPF(HPODispatcher):
-    def __init__(self, space, configurator_config, max_trials, seed,
+    def __init__(self, space, configurator_config, seed,
                  steps_ratio=0.5, asynchronicity=0.5,
                  initial_population=20, final_population=1,
                  window_size=11, max_epochs=10, min_population=3):
 
-        super(DPF, self).__init__(space, configurator_config, max_trials, seed)
+        super(DPF, self).__init__(space, configurator_config, seed)
 
         # Hints for start
         self._initial_population = initial_population
@@ -55,7 +55,7 @@ class DPF(HPODispatcher):
         self.suspension_matrix = self.compute_suspension_matrix(self.get_decision_steps())
 
     def is_completed(self):
-        return self.finished and self.trials_count >= self.max_trials
+        return len(self.finished) >= self.final_population
 
     def add_trial(self, trial_id):
         added = trial_id not in self.trials
@@ -206,5 +206,5 @@ class DPF(HPODispatcher):
         return not suspend
 
 
-def build(space, configurator_config, max_trials, seed, **kwargs):
-    return DPF(space, configurator_config, max_trials, seed, **kwargs)
+def build(space, configurator_config, seed, **kwargs):
+    return DPF(space, configurator_config, seed, **kwargs)

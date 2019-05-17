@@ -8,19 +8,18 @@ from repro.utils.flatten import unflatten
 logger = logging.getLogger(__name__)
 
 
-def build(space, max_trials, seed):
-    return RandomSearch(space, max_trials, seed)
+def build(space, seed):
+    return RandomSearch(space, seed)
 
 
 class RandomSearch(object):
-    def __init__(self, space, max_trials, seed=1):
+    def __init__(self, space, seed=1):
         self.space = space
-        self.max_trials = max_trials
         self.seed = seed
         self.trials = []
 
     def is_completed(self):
-        return len(self.trials) >= self.max_trials
+        return False
 
     def observe(self, params, objective):
         self.trials.append((params, objective))

@@ -59,14 +59,14 @@ class HPOManager:
         in function of the results it is receiving/observing through time
      """
     def __init__(self, resource_manager, dispatcher, task: Callable,
-                 max_trials: int, checkpoints=True,
+                 max_iterations: int, checkpoints=True,
                  gpus=['cuda:0'] * 4):
         """
         :param task: Task that uses the HPO parameters and return results
         """
         self.manager = Manager()
         self.task = task
-        self.max_trials = max_trials
+        self.max_iterations = max_iterations
         # TODO: At the end of HPO, we may need less workers. This should be scaled for
         #       self.resource_manager.
         self.workers = len(gpus)
@@ -104,6 +104,9 @@ class HPOManager:
         self.trials.append(trial)
         self.trial_lookup[trial.id] = trial
 
+    def iterations_count(self):
+        return sum(trial.results[-1]['step'] for trial in self.trials)
+
     def insert_component(self, obj):
         self.components.append(obj)
 
@@ -124,7 +127,7 @@ class HPOManager:
                 stop_count = self.receive_and_suspend()
                 any_change = any_change or stop_count > 0
 
-                if self.dispatcher.is_completed() or self.trial_count >= self.max_trials:
+                if self.dispatcher.is_completed() or self.iterations_count >= self.max_iterations:
                     logging.debug('HPO completed. Breaking out of run loop.')
                     break
 
@@ -139,7 +142,7 @@ class HPOManager:
                 # Create new trial if we don't have enough
                 missing = self.workers - len(self.running_trials)
                 missing -= self.pending_params
-                missing = min(self.max_trials - self.trial_count, missing)
+                # missing = min(self.max_trials - self.trial_count, missing)
 
                 if missing > 0 and self.pending_params < 1:
                     self._queue_suggest()
@@ -171,6 +174,9 @@ class HPOManager:
         self.param_service.terminate()
 
         if gracefully:
+            # Force suspension of all running trials, but catch remaining observations.
+            self.dispatcher.should_suspend = lambda args: True
+
             while self.running_trials:
                 if self.receive_and_suspend():
                     logger.debug(f'{bcolors.OKGREEN}running{bcolors.ENDC}:{len(self.running_trials)} '

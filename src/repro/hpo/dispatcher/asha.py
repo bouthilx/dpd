@@ -16,15 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 def build(space, configurator_config, max_epochs, grace_period, reduction_factor, brackets,
-          max_trials, seed):
+          seed):
     return ASHA(space, configurator_config, max_epochs, grace_period, reduction_factor, brackets,
-                max_trials, seed)
+                seed)
 
 
 class ASHA(HPODispatcher):
     def __init__(self, space, configurator_config, max_epochs, grace_period, reduction_factor,
-                 brackets, max_trials, seed):
-        super(ASHA, self).__init__(space, configurator_config, max_trials, seed)
+                 brackets, seed):
+        super(ASHA, self).__init__(space, configurator_config, seed)
 
         self.max_epochs = max_epochs
         self.grace_period = grace_period

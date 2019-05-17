@@ -17,10 +17,9 @@ logger = logging.getLogger(__name__)
 
 class TPEOptimizer:
 
-    def __init__(self, space, max_trials, seed, **kwargs):
+    def __init__(self, space, seed, **kwargs):
         self.primary = PrimaryAlgo(space, {'TPEOptimizer': kwargs})
         self.primary.algorithm.random_state = seed
-        self.max_trials = max_trials
         self.trial_count = 0
 
     @property
@@ -28,7 +27,7 @@ class TPEOptimizer:
         return self.primary.space
 
     def is_completed(self):
-        return self.trial_count >= self.max_trials
+        return False
 
     def get_params(self, seed):
 
@@ -53,5 +52,5 @@ class TPEOptimizer:
 
 
 if optuna is not None:
-    def build(space, max_trials, seed, **kwargs):
-        return TPEOptimizer(space, max_trials=max_trials, seed=seed, **kwargs)
+    def build(space, seed, **kwargs):
+        return TPEOptimizer(space, seed=seed, **kwargs)

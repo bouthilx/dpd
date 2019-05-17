@@ -14,10 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 class BayesianOptimizer:
-    def __init__(self, space, max_trials, seed, **kwargs):
+    def __init__(self, space, seed, **kwargs):
         self.primary = PrimaryAlgo(space, {'BayesianOptimizer': kwargs})
         self.primary.algorithm.random_state = seed
-        self.max_trials = max_trials
         self.trial_count = 0
 
     @property
@@ -25,7 +24,7 @@ class BayesianOptimizer:
         return self.primary.space
 
     def is_completed(self):
-        return self.trial_count >= self.max_trials
+        return False
 
     def get_params(self, seed=None):
         if seed is None:
@@ -52,9 +51,9 @@ class BayesianOptimizer:
 
 
 if PrimaryAlgo is not None:
-    def build(space, max_trials, seed, strategy, n_initial_points, acq_func, alpha, n_restarts_optimizer,
+    def build(space, seed, strategy, n_initial_points, acq_func, alpha, n_restarts_optimizer,
               noise, normalize_y):
         return BayesianOptimizer(
-            space, max_trials=max_trials, seed=seed, strategy=strategy, n_initial_points=n_initial_points,
+            space, seed=seed, strategy=strategy, n_initial_points=n_initial_points,
             acq_func=acq_func, alpha=alpha, n_restarts_optimizer=n_restarts_optimizer,
             noise=noise, normalize_y=normalize_y)

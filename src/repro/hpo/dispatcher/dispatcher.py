@@ -14,16 +14,15 @@ logger = logging.getLogger(__name__)
 
 
 class HPODispatcher:
-    def __init__(self, space: 'Space', configurator_config: Dict[str, any], max_trials: int, seed=1):
+    def __init__(self, space: 'Space', configurator_config: Dict[str, any], seed=1):
         self.space = space
         self.configurator_config = configurator_config
         self.trial_count = 0
-        self.seeds = numpy.random.RandomState(seed).randint(0, 100000, size=(max_trials, ))
+        self.seeds = numpy.random.RandomState(seed).randint(0, 100000, size=(10000, ))
         self.observations: Dict[str, Dict[str, int]] = defaultdict(dict)
         self.params = dict()
         self.buffered_observations = []
         self.finished = set()
-        self.max_trials = max_trials
 
     def should_resume(self, trial_id) -> bool:
         raise NotImplementedError()
@@ -104,7 +103,7 @@ class HPODispatcher:
         self.observations[trial_id][step] = objective
 
     def is_completed(self) -> bool:
-        return self.hpo.is_completed() or self.trial_count >= self.hpo.max_trial
+        return False
 
     def get_objective(self, trial_id: str) -> Tuple[int, Dict[str, any]]:
         steps = self.observations[trial_id].keys()

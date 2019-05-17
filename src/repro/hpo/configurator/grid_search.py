@@ -12,8 +12,8 @@ from repro.utils.flatten import unflatten
 logger = logging.getLogger(__name__)
 
 
-def build(space, max_trials, seed):
-    return GridSearch(space, max_trials, seed)
+def build(space, seed):
+    return GridSearch(space, seed)
 
 
 class GridSearch(object):

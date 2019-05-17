@@ -3,16 +3,16 @@ import numpy
 from repro.hpo.dispatcher.dispatcher import HPODispatcher
 
 
-def build(space, configurator_config, max_trials, seed, grace_period, min_samples_required):
-    return MedianStoppingRule(space, configurator_config, max_trials, seed, grace_period,
+def build(space, configurator_config, seed, grace_period, min_samples_required):
+    return MedianStoppingRule(space, configurator_config, seed, grace_period,
                               min_samples_required)
 
 
 class MedianStoppingRule(HPODispatcher):
 
-    def __init__(self, space, configurator_config, max_trials, seed, grace_period=60,
+    def __init__(self, space, configurator_config, seed, grace_period=60,
                  min_samples_required=3):
-        super(MedianStoppingRule, self).__init__(space, configurator_config, max_trials, seed)
+        super(MedianStoppingRule, self).__init__(space, configurator_config, seed)
 
         self.grace_period = grace_period
         self.min_samples_required = min_samples_required
