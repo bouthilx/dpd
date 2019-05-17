@@ -75,7 +75,7 @@ class _Bracket():
         max_rungs = int(numpy.log(max_t / min_t) / numpy.log(reduction_factor) - s + 1)
         self.rungs = [(min(min_t * reduction_factor**(k + s), max_t), set())
                       for k in reversed(range(max_rungs + 1))]
-        if self.rungs[0][0] == self.rungs[1][0]:
+        if len(self.rungs) > 1 and self.rungs[0][0] == self.rungs[1][0]:
             del self.rungs[0]
 
         logger.info(f'rungs: {self.rungs}')

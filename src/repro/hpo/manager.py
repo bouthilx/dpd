@@ -249,6 +249,7 @@ class HPOManager:
                 logger.debug(f'{trial.id} {bcolors.WARNING}suspending{bcolors.ENDC} {_get_objective(trial)}')
                 trial.stop()
                 to_be_suspended.add(trial_id)
+                raise RuntimeError(f'{trial.id} {bcolors.FAIL}lost{bcolors.ENDC} {_get_objective(trial)}')
 
             elif trial.has_finished():
                 logger.debug(f'{trial.id} {bcolors.OKBLUE}completed{bcolors.ENDC} {_get_objective(trial)}')
